@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>TutorPulse</title>
+<meta name="description" content="Micro-practice that shows teachers exactly where the class is stuck.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap"><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head><body>
+<canvas id="cv"></canvas><div class="blob b1"></div><div class="blob b2"></div>
+<nav id="nav"><a class="lg" href="#/">Tutor<b>Pulse</b></a><div class="lk"><a href="#/" data-k="home">Home</a><a href="#/features" data-k="features">Features</a><a href="#/pricing" data-k="pricing">Pricing</a><a href="#/about" data-k="about">About</a></div><div class="act"><span id="who" class="who"></span><a href="#/login" id="loginlk" class="nlk">Log in</a><a class="btn" id="nbtn" href="#/register">Get Started</a></div></nav>
+<div id="landing"><section class="hero"><h1>Find the<br><span class="rot" id="rot">stuck point</span><br>before the exam.</h1>
+<p>Teachers upload notes. AI builds micro-practice. Students get nudges, never answers. You see exactly where the class is stuck, live.</p>
+<div class="row"><button class="btn" data-go="app">Get started</button></div></section>
+<div class="marq"><div id="mq"></div></div>
+<section class="sec-l rv" id="how"><h2>Three steps. Zero friction.</h2><div class="cards3">
+<div class="tilt" style="cursor:pointer" onclick="go('#/features')"><div class="n">01</div><h3>Drop notes</h3><p class="mut">Paste or upload notes. AI drafts a cheat sheet and five micro-questions you can edit.</p></div>
+<div class="tilt" style="cursor:pointer" onclick="go('#/features')"><div class="n">02</div><h3>Share a code</h3><p class="mut">Publish and give students a six-letter class code. They join in seconds.</p></div>
+<div class="tilt" style="cursor:pointer" onclick="go('#/features')"><div class="n">03</div><h3>Watch the radar</h3><p class="mut">Attempts, clue use and flagged concepts stream in as students work.</p></div></div></section>
+<section class="sec-l rv"><h2>Hints that teach.</h2><p class="mut">Tap a clue. Students get three, each nudging closer without giving the answer.</p>
+<div class="ladder"><div class="lad" id="lad"><button class="on" data-i="0">Clue 1 / Rule recall</button><button data-i="1">Clue 2 / Strategy focus</button><button data-i="2">Clue 3 / First-step setup</button></div>
+<div class="demo"><div class="mut">Find the discriminant of 2x² + 3x − 2 = 0</div><h3 id="ldt" style="font-size:24px;margin-top:14px"></h3></div></div></section>
+<section class="sec-l rv" id="pricing"><h2>Simple, transparent pricing.</h2><p class="mut">Free for individual teachers. Built for classrooms and schools.</p>
+<div class="cards3" style="margin-top:24px">
+<div class="tilt"><div class="n" style="font-size:36px">Free</div><h3>Teacher Starter</h3><p class="mut">Unlimited practice sets, PDF/Word uploads, AI question generation, up to 150 students.</p><button class="btn sec" data-go="app" style="margin-top:14px;width:100%">Start Free</button></div>
+<div class="tilt" style="border-color:var(--pri)"><div class="n" style="font-size:36px;color:var(--pri)">$0</div><h3>Classroom Pro</h3><p class="mut">Live Gap Radar telemetry, automatic clue progressive nudges, detailed CSV export & heatmaps.</p><button class="btn" data-go="app" style="margin-top:14px;width:100%">Get Started</button></div>
+<div class="tilt"><div class="n" style="font-size:36px;color:var(--cy)">Custom</div><h3>School & District</h3><p class="mut">Custom LMS integration, single sign-on (SSO), district analytics, and dedicated support.</p><button class="btn sec" data-go="app" style="margin-top:14px;width:100%">Contact Sales</button></div>
+</div></section>
+<section class="cta rv"><h2>Your class is already stuck somewhere.</h2><button class="btn" data-go="app">Get started</button></section></div>
+<div id="appwrap"><main id="app"></main></div>
+<footer id="foot"><div class="in"><div><div class="lg">Tutor<b>Pulse</b></div><p>Micro-practice that shows teachers exactly where the class is stuck, before the exam.</p></div>
+<div><h4>Product</h4><a href="#/">Home</a><a href="#/features">Features</a><a href="#/pricing">Pricing</a><a href="#/about">About</a></div>
+<div><h4>Get started</h4><a href="#/register">For teachers</a><a href="#/register">For students</a><a href="#/login">Log in</a></div></div>
+<div class="bt"><span>© 2026 TutorPulse. All rights reserved.</span><a id="top" style="display:inline-block">Back to top</a></div></footer>
+<script src="landing.js"></script><script src="demo.js"></script><script src="app.js"></script></body></html>

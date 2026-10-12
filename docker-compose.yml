@@ -1,0 +1,80 @@
+# One file, four deployment "profiles" (one per EC2 instance).
+#   Local, everything:  COMPOSE_PROFILES=all docker compose up -d --build
+#   EC2-1: --profile edge      (Nginx load balancer + gateway-1)
+#   EC2-2: --profile core      (gateway-2 + registration + login)
+#   EC2-3: --profile learning  (classes + content)
+#   EC2-4: --profile data      (practice + analytics + MongoDB)
+x-common: &common
+  restart: unless-stopped
+  env_file: .env
+  init: true
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: [all, edge]
+    restart: unless-stopped
+    ports: ["3080:80"]
+    environment:
+      GATEWAY_1: "${GATEWAY_1:-gateway-1:3000}"
+      GATEWAY_2: "${GATEWAY_2:-gateway-2:3000}"
+      NGINX_ENVSUBST_FILTER: "GATEWAY_1|GATEWAY_2"
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./web:/usr/share/nginx/html:ro
+  gateway-1:
+    <<: *common
+    build: { context: ., args: { SERVICE: gateway } }
+    profiles: [all, edge]
+    ports: ["3000:3000"]
+    environment: { PORT: 3000, INSTANCE_ID: gateway-1 }
+  gateway-2:
+    <<: *common
+    build: { context: ., args: { SERVICE: gateway } }
+    profiles: [all, core]
+    ports: ["3007:3000"]
+    environment: { PORT: 3000, INSTANCE_ID: gateway-2 }
+  registration:
+    <<: *common
+    build: { context: ., args: { SERVICE: registration } }
+    profiles: [all, core]
+    ports: ["3001:3001"]
+    environment: { PORT: 3001, DB_NAME: tp_auth }
+  login:
+    <<: *common
+    build: { context: ., args: { SERVICE: login } }
+    profiles: [all, core]
+    ports: ["3002:3002"]
+    environment: { PORT: 3002, DB_NAME: tp_login }
+  classes:
+    <<: *common
+    build: { context: ., args: { SERVICE: classes } }
+    profiles: [all, learning]
+    ports: ["3003:3003"]
+    environment: { PORT: 3003, DB_NAME: tp_classes }
+  content:
+    <<: *common
+    build: { context: ., args: { SERVICE: content } }
+    profiles: [all, learning]
+    ports: ["3004:3004"]
+    environment: { PORT: 3004, DB_NAME: tp_content }
+  practice:
+    <<: *common
+    build: { context: ., args: { SERVICE: practice } }
+    profiles: [all, data]
+    ports: ["3005:3005"]
+    environment: { PORT: 3005, DB_NAME: tp_practice }
+  analytics:
+    <<: *common
+    build: { context: ., args: { SERVICE: analytics } }
+    profiles: [all, data]
+    ports: ["3006:3006"]
+    environment: { PORT: 3006, DB_NAME: tp_analytics }
+  mongo:
+    image: mongo:7
+    profiles: [all, data]
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    environment: { MONGO_INITDB_ROOT_USERNAME: tpuser, MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}" }
+    volumes: ["mongo-data:/data/db"]
+volumes:
+  mongo-data:

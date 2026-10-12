@@ -1,0 +1,1554 @@
+{
+ "info": {
+  "name": "TutorPulse Backend",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "baseUrl",
+   "value": "http://localhost"
+  },
+  {
+   "key": "teacherToken",
+   "value": ""
+  },
+  {
+   "key": "studentToken",
+   "value": ""
+  },
+  {
+   "key": "adminToken",
+   "value": ""
+  },
+  {
+   "key": "bad",
+   "value": "abc.def.ghi"
+  },
+  {
+   "key": "classId",
+   "value": ""
+  },
+  {
+   "key": "classCode",
+   "value": ""
+  },
+  {
+   "key": "setId",
+   "value": ""
+  },
+  {
+   "key": "userId",
+   "value": ""
+  }
+ ],
+ "item": [
+  {
+   "name": "1 Auth",
+   "item": [
+    {
+     "name": "Register teacher",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/register",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "register"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Postman Teacher\",\n  \"email\": \"teacher1@test.dev\",\n  \"password\": \"Passw0rd1\",\n  \"role\": \"teacher\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 201',()=>pm.response.to.have.status(201));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Register student",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/register",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "register"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Postman Student\",\n  \"email\": \"student1@test.dev\",\n  \"password\": \"Passw0rd1\",\n  \"role\": \"student\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 201',()=>pm.response.to.have.status(201));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login teacher",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "login"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"teacher1@test.dev\",\n  \"password\": \"Passw0rd1\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));",
+         "pm.collectionVariables.set('teacherToken',pm.response.json().token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login student",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "login"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"student1@test.dev\",\n  \"password\": \"Passw0rd1\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));",
+         "pm.collectionVariables.set('studentToken',pm.response.json().token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login admin",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "login"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"admin@tutorpulse.dev\",\n  \"password\": \"ChangeMe123\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));",
+         "pm.collectionVariables.set('adminToken',pm.response.json().token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Who am I (teacher)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/me",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "me"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login history",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/history",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "history"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "2 Admin",
+   "item": [
+    {
+     "name": "List users",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{adminToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/admin/users?role=student",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "admin",
+        "users"
+       ],
+       "query": [
+        {
+         "key": "role",
+         "value": "student"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Change role",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{adminToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/admin/users/{{userId}}/role",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "admin",
+        "users",
+        "{{userId}}",
+        "role"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"role\": \"student\"\n}"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "3 Classes",
+   "item": [
+    {
+     "name": "Create class",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Algebra II\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 201',()=>pm.response.to.have.status(201));",
+         "pm.collectionVariables.set('classId',pm.response.json().id);",
+         "pm.collectionVariables.set('classCode',pm.response.json().code);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "List my classes",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Join class (student)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes/join",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes",
+        "join"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"code\": \"{{classCode}}\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Get class",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes/{{classId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes",
+        "{{classId}}"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Rename class",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes/{{classId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes",
+        "{{classId}}"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Algebra II (renamed)\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "List students",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes/{{classId}}/students",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes",
+        "{{classId}}",
+        "students"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Regenerate code",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes/{{classId}}/regenerate-code",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes",
+        "{{classId}}",
+        "regenerate-code"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "4 Content",
+   "item": [
+    {
+     "name": "Create practice set",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/content/classes/{{classId}}/sets",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "content",
+        "classes",
+        "{{classId}}",
+        "sets"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"title\": \"Quadratics\",\n  \"notes\": \"\",\n  \"generate\": false\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 201',()=>pm.response.to.have.status(201));",
+         "pm.collectionVariables.set('setId',pm.response.json().id);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Save questions",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/content/sets/{{setId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "content",
+        "sets",
+        "{{setId}}"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"cheat\": [\n    \"D = b^2 - 4ac\"\n  ],\n  \"questions\": [\n    {\n      \"type\": \"mcq\",\n      \"q\": \"Roots of x^2-5x+6=0?\",\n      \"options\": [\n        \"2 and 3\",\n        \"-2 and -3\",\n        \"1 and 6\",\n        \"-1 and -6\"\n      ],\n      \"answer\": \"2 and 3\",\n      \"concept\": \"Factoring\",\n      \"clues\": [\n        \"Product=c, sum=b\",\n        \"List factors of 6\",\n        \"Which pair adds to 5?\"\n      ]\n    },\n    {\n      \"type\": \"num\",\n      \"q\": \"Discriminant of 2x^2+3x-2?\",\n      \"answer\": \"25\",\n      \"concept\": \"Discriminant\",\n      \"clues\": [\n        \"D=b^2-4ac\",\n        \"Find a, b, c\",\n        \"3^2-4(2)(-2)\"\n      ]\n    }\n  ]\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Publish",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/content/sets/{{setId}}/publish",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "content",
+        "sets",
+        "{{setId}}",
+        "publish"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"published\": true\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Student views set (no answers)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/content/sets/{{setId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "content",
+        "sets",
+        "{{setId}}"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "5 Practice",
+   "item": [
+    {
+     "name": "Open set + progress",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Wrong attempt",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}/questions/1/attempt",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}",
+        "questions",
+        "1",
+        "attempt"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"answer\": \"24\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Clue 1",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}/questions/1/clue",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}",
+        "questions",
+        "1",
+        "clue"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Correct attempt",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}/questions/1/attempt",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}",
+        "questions",
+        "1",
+        "attempt"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"answer\": \"25\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Progress",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}/progress",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}",
+        "progress"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "6 Analytics",
+   "item": [
+    {
+     "name": "Gap radar",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/analytics/classes/{{classId}}/radar",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "analytics",
+        "classes",
+        "{{classId}}",
+        "radar"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Per student",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/analytics/classes/{{classId}}/students",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "analytics",
+        "classes",
+        "{{classId}}",
+        "students"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Flagged concepts",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/analytics/classes/{{classId}}/concepts",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "analytics",
+        "classes",
+        "{{classId}}",
+        "concepts"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Export CSV",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/analytics/classes/{{classId}}/export.csv",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "analytics",
+        "classes",
+        "{{classId}}",
+        "export.csv"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 200',()=>pm.response.to.have.status(200));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "7 Security tests",
+   "item": [
+    {
+     "name": "Wrong password -> 401",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "auth",
+        "login"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"teacher1@test.dev\",\n  \"password\": \"WrongPass1\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 401',()=>pm.response.to.have.status(401));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Invalid token -> 401",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{bad}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 401',()=>pm.response.to.have.status(401));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "No token -> 401",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 401',()=>pm.response.to.have.status(401));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Student creates class -> 403",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/classes",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "classes"
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Nope\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 403',()=>pm.response.to.have.status(403));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Teacher uses practice -> 403",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/practice/sets/{{setId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "practice",
+        "sets",
+        "{{setId}}"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 403',()=>pm.response.to.have.status(403));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Student reads analytics -> 403",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{studentToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/analytics/classes/{{classId}}/radar",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "analytics",
+        "classes",
+        "{{classId}}",
+        "radar"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 403',()=>pm.response.to.have.status(403));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Teacher lists users -> 403",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       },
+       {
+        "key": "Authorization",
+        "value": "Bearer {{teacherToken}}"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/api/admin/users",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "api",
+        "admin",
+        "users"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('status 403',()=>pm.response.to.have.status(403));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "8 Load balancer",
+   "item": [
+    {
+     "name": "Health (check X-Served-By header, send repeatedly)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{baseUrl}}/health",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "health"
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('has X-Served-By',()=>pm.response.to.have.header('X-Served-By'));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
