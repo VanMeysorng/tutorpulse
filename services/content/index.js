@@ -6,7 +6,7 @@ const { createApp, finish, start } = require('../../common/app');
 const { trustGateway, role, internal } = require('../../common/auth');
 const { requireClassAccess } = require('../../common/clients');
 const { wrap, httpError, oid, cleanJson } = require('../../common/util');
-const { generate, Question } = require('./generate');
+const { generate, askAssistant, generateFeedbackTemplate, Question } = require('./generate');
 
 const schema = new mongoose.Schema({
   classId: { type: String, required: true, index: true },
@@ -53,7 +53,7 @@ app.get('/content/sets/:id', role('teacher', 'student'), wrap(async (req, res) =
 }));
 app.put('/content/sets/:id', role('teacher'), wrap(async (req, res) => {
   const s = await ownSet(req, req.params.id);
-  const b = z.object({ title: z.string().trim().min(2).max(120), notes: z.string().max(20000), cheat: z.array(z.string().max(200)).max(8), questions: z.array(Question).max(5) }).partial().parse(req.body);
+  const b = z.object({ title: z.string().trim().min(2).max(120), notes: z.string().max(20000), cheat: z.array(z.string().max(200)).max(12), questions: z.array(Question).max(25) }).partial().parse(req.body);
   Object.assign(s, b); if (b.questions) s.source = s.source === 'ai' ? 'ai-edited' : 'manual';
   if (s.published && s.questions.length === 0) throw httpError(400, 'A published set needs at least one question');
   res.json(await s.save());
@@ -70,6 +70,16 @@ app.post('/content/sets/:id/publish', role('teacher'), wrap(async (req, res) => 
   s.published = published; res.json(await s.save());
 }));
 app.delete('/content/sets/:id', role('teacher'), wrap(async (req, res) => { const s = await ownSet(req, req.params.id); await s.deleteOne(); res.status(204).end(); }));
+app.post('/content/assistant', wrap(async (req, res) => {
+  const { prompt } = z.object({ prompt: z.string().trim().min(1).max(2000) }).parse(req.body);
+  const reply = await askAssistant(prompt);
+  res.json({ reply });
+}));
+app.post('/content/feedback-template', role('teacher'), wrap(async (req, res) => {
+  const { studentName, areaToImprove } = z.object({ studentName: z.string().default('Student'), areaToImprove: z.string().default('') }).parse(req.body);
+  const template = await generateFeedbackTemplate(studentName, areaToImprove);
+  res.json({ template });
+}));
 app.get('/internal/sets/:id', internal, wrap(async (req, res) => {
   const s = await PracticeSet.findById(oid(req.params.id)); if (!s) throw httpError(404, 'Set not found'); res.json(s);
 }));

@@ -16,6 +16,22 @@ const schema = new mongoose.Schema({
 }, { timestamps: true });
 cleanJson(schema);
 const Class = mongoose.model('Class', schema);
+const feedbackSchema = new mongoose.Schema({
+  classId: { type: String, required: true, index: true },
+  teacherId: { type: String, required: true },
+  studentId: { type: String, required: true, index: true },
+  studentName: { type: String, default: '' },
+  areaToImprove: { type: String, default: '' },
+  feedbackText: { type: String, required: true },
+  meetingDate: { type: String, default: '' },
+  meetingTime: { type: String, default: '' },
+  meetingTopic: { type: String, default: '' },
+  studentResponse: { type: String, default: '' },
+  status: { type: String, enum: ['sent', 'acknowledged', 'rescheduled'], default: 'sent' }
+}, { timestamps: true });
+cleanJson(feedbackSchema);
+const Feedback = mongoose.model('Feedback', feedbackSchema);
+
 const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const genCode = () => Array.from({ length: 6 }, () => A[crypto.randomInt(A.length)]).join('');
 async function uniqueCode() { for (let i = 0; i < 8; i++) { const c = genCode(); if (!(await Class.exists({ code: c }))) return c; } throw httpError(500, 'Could not allocate code'); }
@@ -61,6 +77,56 @@ app.get('/classes/:id/students', role('teacher'), wrap(async (req, res) => {
 }));
 app.delete('/classes/:id', role('teacher'), wrap(async (req, res) => {
   const c = await mine(req, req.params.id, { ownerOnly: true }); await c.deleteOne(); res.status(204).end();
+}));
+app.post('/classes/:id/feedback', role('teacher'), wrap(async (req, res) => {
+  const c = await mine(req, req.params.id, { ownerOnly: true });
+  const b = z.object({
+    studentId: z.string(),
+    studentName: z.string().optional().default('Student'),
+    areaToImprove: z.string().optional().default(''),
+    feedbackText: z.string().min(1).max(2000),
+    meetingDate: z.string().optional().default(''),
+    meetingTime: z.string().optional().default(''),
+    meetingTopic: z.string().optional().default(''),
+    meetingSchedule: z.object({
+      date: z.string().optional(),
+      time: z.string().optional(),
+      topic: z.string().optional()
+    }).optional()
+  }).parse(req.body);
+  const mDate = b.meetingDate || (b.meetingSchedule && b.meetingSchedule.date) || '';
+  const mTime = b.meetingTime || (b.meetingSchedule && b.meetingSchedule.time) || '';
+  const mTopic = b.meetingTopic || (b.meetingSchedule && b.meetingSchedule.topic) || '';
+  const fb = await Feedback.create({
+    classId: c.id,
+    teacherId: req.user.id,
+    studentId: b.studentId,
+    studentName: b.studentName,
+    areaToImprove: b.areaToImprove,
+    feedbackText: b.feedbackText,
+    meetingDate: mDate,
+    meetingTime: mTime,
+    meetingTopic: mTopic
+  });
+  res.status(201).json(fb);
+}));
+app.get('/classes/:id/feedback', role('teacher', 'student', 'admin'), wrap(async (req, res) => {
+  const c = await mine(req, req.params.id);
+  const q = req.user.role === 'student' ? { classId: c.id, studentId: req.user.id } : { classId: c.id };
+  const items = await Feedback.find(q).sort('-createdAt');
+  res.json(items);
+}));
+app.post('/classes/:id/feedback/:feedbackId/respond', role('student'), wrap(async (req, res) => {
+  const { response, status } = z.object({
+    response: z.string().min(1).max(1000),
+    status: z.enum(['acknowledged', 'rescheduled']).default('acknowledged')
+  }).parse(req.body);
+  const fb = await Feedback.findOne({ _id: oid(req.params.feedbackId), studentId: req.user.id });
+  if (!fb) throw httpError(404, 'Feedback record not found');
+  fb.studentResponse = response;
+  fb.status = status;
+  await fb.save();
+  res.json(fb);
 }));
 app.get('/internal/classes/:id', internal, wrap(async (req, res) => {
   const c = await Class.findById(oid(req.params.id)).lean(); if (!c) throw httpError(404, 'Class not found');

@@ -60,5 +60,35 @@ app.get('/analytics/classes/:classId/export.csv', T, guard, wrap(async (req, res
   res.type('text/csv').attachment(`class-${req.params.classId}.csv`)
     .send(['student,set,question,concept,type,correct,time', ...rows.map(r => [n[r.studentId] || r.studentId, r.setId, 'Q' + (r.qIndex + 1), r.concept, r.type, r.correct ?? '', r.createdAt.toISOString()].map(esc).join(','))].join('\n'));
 }));
+app.get('/analytics/classes/:classId/ranking', guard, wrap(async (req, res) => {
+  const rows = await Event.aggregate([
+    { $match: match(req) },
+    { $group: {
+      _id: '$studentId',
+      attempts: { $sum: A },
+      wrong: { $sum: W },
+      clues: { $sum: C },
+      solved: { $addToSet: { $cond: [{ $eq: ['$correct', true] }, '$qIndex', null] } }
+    } }
+  ]);
+  const n = await names(rows.map(r => r._id));
+  const mapped = rows.map(r => {
+    const solvedCount = r.solved.filter(x => x !== null).length;
+    const accuracy = r.attempts ? Math.round(((r.attempts - r.wrong) / r.attempts) * 100) : 0;
+    const score = (solvedCount * 100) + accuracy - (r.clues * 5);
+    return {
+      studentId: r._id,
+      name: n[r._id] || 'Student ' + String(r._id).slice(-4),
+      solved: solvedCount,
+      attempts: r.attempts,
+      accuracy,
+      clues: r.clues,
+      score: Math.max(0, score)
+    };
+  });
+  mapped.sort((a, b) => b.score - a.score || b.solved - a.solved || b.accuracy - a.accuracy);
+  mapped.forEach((item, idx) => { item.rank = idx + 1; });
+  res.json(mapped);
+}));
 finish(app);
 start(app, 'analytics-service', () => Event.init());

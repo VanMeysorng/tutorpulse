@@ -22,11 +22,17 @@ const RULES = [
   ['GET', R('auth\\/(me|history)'), ANY],
   ['*', R(`admin\\/users${ID}`), ['admin']],
   ['POST', R('classes\\/join'), ['student']],
+  ['POST', R('classes\\/[\\w.-]+\\/feedback\\/[\\w.-]+\\/respond'), ['student']],
+  ['GET', R('classes\\/[\\w.-]+\\/feedback'), ANY],
+  ['POST', R('classes\\/[\\w.-]+\\/feedback'), ['teacher']],
   ['GET', R(`classes${ID}`), ANY],
   ['*', R(`classes${ID}`), ['teacher']],
+  ['POST', R('content\\/assistant'), ANY],
+  ['POST', R('content\\/feedback-template'), ['teacher', 'admin']],
   ['GET', R(`content${ID}`), ['teacher', 'student']],
   ['*', R(`content${ID}`), ['teacher']],
   ['*', R(`practice${ID}`), ['student']],
+  ['GET', R('analytics\\/classes\\/[\\w.-]+\\/ranking'), ANY],
   ['GET', R(`analytics${ID}`), ['teacher', 'admin']],
 ];
 

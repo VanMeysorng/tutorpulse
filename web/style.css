@@ -94,3 +94,28 @@ select{width:auto;max-width:100%}select option{color:#111}.chk{display:flex;alig
 @keyframes flow{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .card-hero{position:relative;overflow:visible;background:linear-gradient(135deg,#16142acc,#12102699);border:1px solid var(--line);border-radius:28px;padding:32px 28px}
 .card-hero::before{content:'';position:absolute;top:-50%;right:-30%;width:400px;height:400px;background:radial-gradient(circle,#b6ff3c1f 0%,transparent 70%);pointer-events:none}
+
+/* Flowchart feature styles: Ranking, Feedback, AI Assistant */
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-weight:700;font-size:12px}
+.rank-1{background:gold;color:#10101a;box-shadow:0 0 12px gold}
+.rank-2{background:#e0e0e0;color:#10101a}
+.rank-3{background:#cd7f32;color:#10101a}
+.rank-other{background:#ffffff14;color:var(--mut)}
+
+.feedback-card{background:#1a1735cc;border:1px solid #38e1ff44;border-radius:18px;padding:16px;margin:12px 0}
+.feedback-card b{color:var(--cy)}
+
+.chat-fab{position:fixed;right:24px;bottom:24px;z-index:90;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,var(--cy),var(--pink));color:#10101a;border:none;border-radius:99px;padding:12px 20px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 8px 32px #38e1ff55;transition:transform .2s}
+.chat-fab:hover{transform:translateY(-2px) scale(1.04)}
+.chat-fab.locked{background:#2a2544;color:var(--mut);border:1px dashed var(--bad);cursor:not-allowed;box-shadow:none}
+
+.chat-modal{position:fixed;right:24px;bottom:80px;width:min(380px,calc(100vw - 48px));height:480px;background:#14122acc;backdrop-filter:blur(24px);border:1px solid var(--line);border-radius:24px;box-shadow:0 16px 48px #000c;z-index:95;display:none;flex-direction:column;overflow:hidden;animation:in .25s ease}
+.chat-header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:#1a1738}
+.chat-msgs{flex:1;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.chat-msg{max-width:85%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.4}
+.chat-msg.bot{background:#ffffff12;color:var(--ink);align-self:flex-start}
+.chat-msg.user{background:var(--cy);color:#10101a;align-self:flex-end;font-weight:500}
+.chat-input-bar{padding:12px;border-top:1px solid var(--line);display:flex;gap:8px;background:#121028}
+.chat-input-bar input{flex:1;padding:8px 12px;font-size:13px}
+
+.practice-lock-banner{background:#ff5d7318;border:1px solid var(--bad);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px;color:var(--bad)}

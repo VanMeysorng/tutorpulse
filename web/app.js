@@ -10,7 +10,7 @@ const store = {
 };
 let token = store.get('tp_token'), me = null;
 try { me = JSON.parse(store.get('tp_user') || 'null'); } catch (e) {}
-const S = { draft: null, tab: 'sets', qi: 0, sel: '', fb: null, sets: [], timer: null, pr: null, radarSet: '' };
+const S = { draft: null, tab: 'sets', qi: 0, sel: '', fb: null, sets: [], timer: null, pr: null, radarSet: '', activeStudent: null, chatOpen: false, chatHistory: [] };
 
 /* ---------- helpers ---------- */
 const go = h => { if (location.hash === h) route(); else location.hash = h; };
@@ -58,12 +58,12 @@ async function route() {
   stopTimer();
   const [p, a] = parts();
   $$('#nav .lk a').forEach(x => x.classList.toggle('on', x.dataset.k === (!p ? 'home' : p)));
-  if (!p) return showLanding();
+  if (!p) { updateChatWidget(); return showLanding(); }
   $('#landing').style.display = 'none'; $('#appwrap').style.display = 'block'; scrollTo(0, 0);
-  if (p === 'features') return show(featuresPage());
-  if (p === 'pricing') return show(pricingPage());
-  if (p === 'about') return show(aboutPage());
-  if (p === 'login' || p === 'register') return me ? go('#/dash') : show(authPage(p));
+  if (p === 'features') { updateChatWidget(); return show(featuresPage()); }
+  if (p === 'pricing') { updateChatWidget(); return show(pricingPage()); }
+  if (p === 'about') { updateChatWidget(); return show(aboutPage()); }
+  if (p === 'login' || p === 'register') { updateChatWidget(); return me ? go('#/dash') : show(authPage(p)); }
   if (!me || !token || tokenExpired(token)) { if (me) logout('Your session expired. Please log in again.'); else go('#/login'); return; }
   show('<div class="card">Loading…</div>');
   try {
@@ -75,6 +75,7 @@ async function route() {
     else go('#/dash');
     if (p === 'class' && S.tab === 'radar' && me.role !== 'student') S.timer = setInterval(refreshRadar, 6000);
   } catch (e) { if (e.message !== 'expired') show(`<div class="card"><h2>Something went wrong</h2><p class="mut">${esc(e.message)}</p><a class="btn" href="#/dash">Back to dashboard</a></div>`); }
+  finally { updateChatWidget(); }
 }
 
 /* ---------- public pages ---------- */
@@ -496,23 +497,65 @@ async function tClass(id) {
   let body = '';
   if (S.tab === 'sets') {
     S.sets = await api('GET', `/content/classes/${id}/sets`);
-    body = `<div class="card"><h2>New practice set</h2><p class="mut">Paste lesson notes or load a .pdf, .docx, .doc, .txt, or .md file. AI drafts a cheat sheet and 5 questions you can edit.</p>
-<input id="s-title" placeholder="Title, e.g. Quadratics" style="margin:10px 0"><input type="file" id="s-file" accept=".pdf,.doc,.docx,.txt,.md,.csv,.rtf" style="margin-bottom:10px"><textarea id="s-notes" placeholder="Lesson notes…"></textarea>
-<label class="chk"><input type="checkbox" id="s-gen" checked> Generate questions with AI</label><button class="btn" data-a="createSet" style="margin-top:12px">Create practice set</button></div>
-<div class="card"><h2>Practice sets</h2>${S.sets.length ? S.sets.map(s => `<div class="item"><div><b>${esc(s.title)}</b><div class="mut">${s.questions.length} question(s) · ${s.published ? 'Published' : 'Draft'}</div></div><a class="btn sec" href="#/set/${s.id}">Edit</a></div>`).join('') : '<p class="mut">None yet.</p>'}</div>`;
+    body = `<div class="card"><h2>New Practice Set</h2><p class="mut">Paste lesson notes or upload a .pdf, .docx, image, or text file. AI auto-generates a cheat sheet, up to 15 scaffolded questions, and 3-ready clues (Rule recall, Strategy focus, First-step setup) that you can edit manually.</p>
+<input id="s-title" placeholder="Title, e.g. Quadratics" style="margin:10px 0"><input type="file" id="s-file" accept=".pdf,.doc,.docx,.txt,.md,.csv,.rtf,.png,.jpg,.jpeg,.webp" style="margin-bottom:10px"><textarea id="s-notes" placeholder="Lesson notes or formulas…"></textarea>
+<label class="chk"><input type="checkbox" id="s-gen" checked> Auto-generate cheat sheet & 15 questions with AI</label><button class="btn" data-a="createSet" style="margin-top:12px">Create Practice Set</button></div>
+<div class="card"><h2>Practice Sets</h2>${S.sets.length ? S.sets.map(s => `<div class="item"><div><b>${esc(s.title)}</b><div class="mut">${s.questions.length} question(s) · ${s.published ? '<span class="tag g">Published</span>' : '<span class="tag y">Draft</span>'}</div></div><a class="btn sec" href="#/set/${s.id}">Edit</a></div>`).join('') : '<p class="mut">No sets yet. Create your first practice set above.</p>'}</div>`;
+  } else if (S.tab === 'ranking') {
+    const [rk, fbs, st] = await Promise.all([
+      api('GET', `/analytics/classes/${id}/ranking`),
+      api('GET', `/classes/${id}/feedback`),
+      api('GET', `/classes/${id}/students`)
+    ]);
+    const enrolledMap = new Map();
+    st.students.forEach(s => enrolledMap.set(s.id, s.name));
+    rk.forEach(r => enrolledMap.delete(r.studentId));
+    enrolledMap.forEach((name, sId) => {
+      rk.push({ studentId: sId, name, solved: 0, attempts: 0, accuracy: 0, clues: 0, score: 0, rank: rk.length + 1 });
+    });
+    rk.sort((a, b) => (b.score - a.score) || (b.accuracy - a.accuracy));
+    rk.forEach((r, idx) => { r.rank = idx + 1; });
+    
+    const rankBadge = r => r === 1 ? '<span class="rank-badge rank-1">🥇1</span>' : r === 2 ? '<span class="rank-badge rank-2">🥈2</span>' : r === 3 ? '<span class="rank-badge rank-3">🥉3</span>' : `<span class="rank-badge rank-other">${r}</span>`;
+    const curStudent = S.activeStudent || (rk[0] ? { id: rk[0].studentId, name: rk[0].name, area: '' } : null);
+
+    body = `<div class="card"><h2>Student Scores & Ranking</h2><p class="mut">Live class leaderboard with practice scores, accuracy, and question traction.</p>
+<div class="tbl"><table><tr><th>Rank</th><th>Student</th><th>Score</th><th>Accuracy</th><th>Solved</th><th>Clues</th><th>Action</th></tr>
+${rk.length ? rk.map(r => `<tr><td>${rankBadge(r.rank)}</td><td><b>${esc(r.name)}</b></td><td><span class="badge" style="background:#b6ff3c22;color:var(--pri)">${r.score} pts</span></td><td>${r.accuracy}%</td><td>${r.solved}</td><td>${r.clues}</td><td><button class="btn sec" style="padding:6px 12px;font-size:12px" data-a="selStudent" data-v="${encodeURIComponent(JSON.stringify({ id: r.studentId, name: r.name }))}">Select Student</button></td></tr>`).join('') : '<tr><td colspan="7" class="mut">No student practice recorded yet.</td></tr>'}
+</table></div></div>
+
+${curStudent ? `<div class="card" style="border:1px solid #38e1ff55;background:#14122d">
+<h2>Student Details & Feedback: <span style="color:var(--cy)">${esc(curStudent.name)}</span></h2>
+<p class="mut">Provide targeted feedback, generate an AI template, and arrange a scheduled meeting invite.</p>
+<div style="margin-top:12px"><label class="mut" style="font-size:12px">Area to Improve</label><input id="fb-area" placeholder="e.g. Quadratic factoring, discriminant calculation, sign errors" value="${esc(curStudent.area || '')}" style="margin-top:4px"></div>
+<div style="margin-top:12px"><div class="row" style="justify-content:space-between"><label class="mut" style="font-size:12px">Feedback to Send (Editable)</label><button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="genAITemplate">Generate AI Template</button></div>
+<textarea id="fb-text" placeholder="Type personalized feedback or click 'Generate AI Template'..." style="min-height:90px;margin-top:6px"></textarea></div>
+<div style="margin-top:12px"><label class="mut" style="font-size:12px">Arrange Meeting (Date, Time, Topic)</label>
+<div class="row" style="gap:8px;margin-top:6px"><input type="date" id="fb-date" style="flex:1"><input type="time" id="fb-time" style="flex:1"><input type="text" id="fb-topic" placeholder="Topic: e.g. 1-on-1 Concept Review" style="flex:2"></div></div>
+<button class="btn" data-a="sendStudentFeedback" style="margin-top:14px">Send Feedback & Meeting Invite</button>
+</div>` : ''}
+
+<div class="card"><h2>Sent Feedback & Meetings (${fbs.length})</h2>
+${fbs.length ? fbs.map(f => `<div class="feedback-card"><div class="row" style="justify-content:space-between"><b>${esc(f.studentName || 'Student')}</b><span class="mut" style="font-size:12px">${new Date(f.createdAt).toLocaleDateString()}</span></div>
+${f.areaToImprove ? `<div style="margin-top:4px"><span class="badge" style="background:#ffc43d22;color:var(--warn)">Area to improve: ${esc(f.areaToImprove)}</span></div>` : ''}
+<p style="margin:8px 0;line-height:1.4">${esc(f.feedbackText)}</p>
+${f.meetingDate ? `<div class="pulse-badge" style="font-size:12px;margin-top:6px">📅 Meeting: ${esc(f.meetingDate)} ${esc(f.meetingTime)} — Topic: <b>${esc(f.meetingTopic)}</b></div>` : ''}
+${f.studentResponse ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:13px"><span style="color:var(--pri)">Student reply:</span> <i>"${esc(f.studentResponse)}"</i> <span class="tag g">${esc(f.status || 'acknowledged')}</span></div>` : '<div class="mut" style="margin-top:6px;font-size:12px">Awaiting student response...</div>'}
+</div>`).join('') : '<p class="mut">No feedback sent yet in this class.</p>'}
+</div>`;
   } else if (S.tab === 'share') {
     const st = await api('GET', `/classes/${id}/students`);
-    body = `<div class="card"><h2>Class code</h2><div class="code">${esc(c.code)}</div><p class="mut">Students enter this code to join. Regenerate it if it was shared too widely.</p>
+    body = `<div class="card"><h2>Class Code</h2><div class="code">${esc(c.code)}</div><p class="mut">Students enter this 6-letter code to join. Regenerate it if it was shared too widely.</p>
 <div class="row" style="margin-top:12px"><button class="btn sec" data-a="regenCode">Regenerate code</button></div></div>
-<div class="card"><h2>Rename</h2><div class="row"><input id="r-name" value="${esc(c.name)}" style="flex:1;min-width:200px"><button class="btn sec" data-a="renameClass">Save</button></div></div>
-<div class="card"><h2>Students (${st.count})</h2>${st.students.length ? st.students.map(s => `<div class="item"><span>${esc(s.name)}</span></div>`).join('') : '<p class="mut">Nobody has joined yet.</p>'}</div>
+<div class="card"><h2>Rename Class</h2><div class="row"><input id="r-name" value="${esc(c.name)}" style="flex:1;min-width:200px"><button class="btn sec" data-a="renameClass">Save</button></div></div>
+<div class="card"><h2>Enrolled Students (${st.count})</h2>${st.students.length ? st.students.map(s => `<div class="item"><span><b>${esc(s.name)}</b></span><span class="mut">${s.id}</span></div>`).join('') : '<p class="mut">Nobody has joined yet.</p>'}</div>
 <div class="card"><button class="btn dng" data-a="delClass">Delete class</button></div>`;
   } else {
     if (!admin) { S.sets = await api('GET', `/content/classes/${id}/sets`); if (!S.radarSet || !S.sets.find(s => s.id === S.radarSet)) S.radarSet = (S.sets[0] || {}).id || ''; }
     const sel = admin ? '' : `<div class="row" style="margin-bottom:14px"><span class="mut">Practice set</span><select id="radar-set">${S.sets.map(s => `<option value="${s.id}" ${s.id === S.radarSet ? 'selected' : ''}>${esc(s.title)}</option>`).join('')}</select><button class="btn sec" data-a="csv">Export CSV</button></div>`;
     body = sel + `<div id="radarBox">${await radarHtml(id)}</div>`;
   }
-  const tabs = admin ? '' : '<div class="steps">' + [['sets', 'Practice sets'], ['share', 'Class code and students'], ['radar', 'Gap Radar']].map(t => `<button data-a="tab" data-v="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('') + '</div>';
+  const tabs = admin ? '' : '<div class="steps">' + [['sets', 'Practice Sets'], ['ranking', 'Student Scores & Ranking'], ['share', 'Enrollment & Code'], ['radar', 'Gap Radar']].map(t => `<button data-a="tab" data-v="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('') + '</div>';
   return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2></div>${tabs}${body}`;
 }
 async function radarHtml(id) {
@@ -546,11 +589,11 @@ function setEditor() {
 <div class="card"><h2>Details</h2><input data-f="title" value="${esc(d.title)}" placeholder="Title"><p class="mut" style="margin-top:12px">Lesson notes</p><textarea data-f="notes">${esc(d.notes)}</textarea>
 <div class="row" style="margin-top:10px"><button class="btn sec" data-a="regenSet">Regenerate with AI from notes</button></div></div>
 <div class="card"><h2>Cheat sheet</h2><p class="mut">One item per line. Pinned for students while they practice.</p><textarea data-f="cheat" style="min-height:100px">${esc(d.cheat.join('\n'))}</textarea></div>
-<div class="card"><h2>Questions (${d.questions.length}/5)</h2>${d.questions.map((q, i) => `<div class="q"><div class="row" style="justify-content:space-between"><h3>Q${i + 1}</h3><div class="row"><select data-f="type" data-i="${i}"><option value="mcq" ${q.type === 'mcq' ? 'selected' : ''}>Multiple choice</option><option value="num" ${q.type === 'num' ? 'selected' : ''}>Numeric</option></select><button class="btn dng" data-a="delQ" data-v="${i}">Remove</button></div></div>
+<div class="card"><h2>Questions (${d.questions.length}/15)</h2><p class="mut">Scaffolded practice questions with 3-ready clues. You can modify any question, formula, or clue manually.</p>${d.questions.map((q, i) => `<div class="q"><div class="row" style="justify-content:space-between"><h3>Q${i + 1}</h3><div class="row"><select data-f="type" data-i="${i}"><option value="mcq" ${q.type === 'mcq' ? 'selected' : ''}>Multiple choice</option><option value="num" ${q.type === 'num' ? 'selected' : ''}>Numeric</option></select><button class="btn dng" data-a="delQ" data-v="${i}">Remove</button></div></div>
 <input data-f="q" data-i="${i}" value="${esc(q.q)}" placeholder="Question">${q.type === 'mcq' ? `<div class="grid2" style="margin-top:8px">${(q.options || ['', '', '', '']).map((o, j) => `<input data-f="opt" data-i="${i}" data-j="${j}" value="${esc(o)}" placeholder="Option ${j + 1}">`).join('')}</div>` : ''}
 <div class="grid2" style="margin-top:8px"><input data-f="answer" data-i="${i}" value="${esc(q.answer)}" placeholder="${q.type === 'mcq' ? 'Correct answer (must match an option)' : 'Correct number'}"><input data-f="concept" data-i="${i}" value="${esc(q.concept)}" placeholder="Concept, e.g. Factoring"></div>
 ${['Rule recall', 'Strategy focus', 'First-step setup'].map((n, j) => `<input style="margin-top:6px" data-f="clue" data-i="${i}" data-j="${j}" value="${esc(q.clues[j] || '')}" placeholder="Clue ${j + 1}: ${n}">`).join('')}</div>`).join('')}
-<div class="row" style="margin-top:16px"><button class="btn sec" data-a="addQ" ${d.questions.length >= 5 ? 'disabled' : ''}>Add question</button><button class="btn" data-a="saveSet">Save changes</button><button class="btn sec" data-a="pubSet">${d.published ? 'Unpublish' : 'Publish to class'}</button><button class="btn dng" data-a="delSet">Delete set</button></div><div class="err" id="serr"></div></div>`;
+<div class="row" style="margin-top:16px"><button class="btn sec" data-a="addQ" ${d.questions.length >= 25 ? 'disabled' : ''}>Add question</button><button class="btn" data-a="saveSet">Save changes</button><button class="btn sec" data-a="pubSet">${d.published ? 'Unpublish' : 'Publish to class'}</button><button class="btn dng" data-a="delSet">Delete set</button></div><div class="err" id="serr"></div></div>`;
 }
 function cleanSet() {
   const d = S.draft;
@@ -564,8 +607,44 @@ async function sDash() {
 <div class="card">${cs.length ? cs.map(c => `<div class="item"><b>${esc(c.name)}</b><a class="btn sec" href="#/class/${c.id}">Open</a></div>`).join('') : '<p class="mut">You have not joined a class yet. Ask your teacher for the code.</p>'}</div>${footer()}`;
 }
 async function sClass(id) {
-  const [c, sets] = await Promise.all([api('GET', '/classes/' + id), api('GET', `/content/classes/${id}/sets`)]);
-  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2></div><div class="card"><h2>Practice sets</h2>${sets.length ? sets.map(s => `<div class="item"><div><b>${esc(s.title)}</b><div class="mut">${s.questions.length} question(s)</div></div><a class="btn" href="#/practice/${s.id}">Practice</a></div>`).join('') : '<p class="mut">Your teacher has not published anything yet.</p>'}</div>`;
+  const [c, sets, ranking, fbs] = await Promise.all([
+    api('GET', '/classes/' + id),
+    api('GET', `/content/classes/${id}/sets`),
+    api('GET', `/analytics/classes/${id}/ranking`),
+    api('GET', `/classes/${id}/feedback`)
+  ]);
+  const myRankItem = ranking.find(r => r.studentId === me.id);
+  const myRank = myRankItem ? `#${myRankItem.rank} (${myRankItem.score} pts)` : 'Unranked (complete a practice set to rank)';
+  const rankBadge = r => r === 1 ? '<span class="rank-badge rank-1">🥇1</span>' : r === 2 ? '<span class="rank-badge rank-2">🥈2</span>' : r === 3 ? '<span class="rank-badge rank-3">🥉3</span>' : `<span class="rank-badge rank-other">${r}</span>`;
+
+  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2></div>
+
+<div class="card" style="border:1px solid #b6ff3c44;background:#131b26">
+<div class="row" style="justify-content:space-between">
+<div><b>🏆 Your Ranking</b><div class="mut">${esc(myRank)}</div></div>
+<div class="pulse-badge"><i class="pulse-dot g"></i> Live Traction</div>
+</div>
+</div>
+
+<div class="card"><h2>Practice Sets (Up to 15 Questions)</h2><p class="mut">Each set features pinned formulas, 15 practice questions, and 3 scaffolded clues.</p>
+${sets.length ? sets.map(s => `<div class="item"><div><b>${esc(s.title)}</b><div class="mut">${s.questions.length} question(s) · AI Cheat Sheet & Clues</div></div><a class="btn" href="#/practice/${s.id}">Practice Now</a></div>`).join('') : '<p class="mut">Your teacher has not published practice sets yet.</p>'}
+</div>
+
+<div class="card"><h2>Teacher Feedback & Meeting Schedule (${fbs.length})</h2><p class="mut">Personalized feedback and meeting invites from your teacher. You can submit your response below.</p>
+${fbs.length ? fbs.map(f => `<div class="feedback-card">
+<div class="row" style="justify-content:space-between"><b>Feedback from Teacher</b><span class="mut" style="font-size:12px">${new Date(f.createdAt).toLocaleDateString()}</span></div>
+${f.areaToImprove ? `<div style="margin-top:6px"><span class="badge" style="background:#ffc43d22;color:var(--warn)">Area to improve: ${esc(f.areaToImprove)}</span></div>` : ''}
+<p style="margin:8px 0;line-height:1.4">${esc(f.feedbackText)}</p>
+${f.meetingDate ? `<div class="pulse-badge" style="margin:8px 0;font-size:12px">📅 Scheduled Meeting: ${esc(f.meetingDate)} at ${esc(f.meetingTime)} — Topic: <b>${esc(f.meetingTopic)}</b></div>` : ''}
+${f.studentResponse ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:13px"><span style="color:var(--pri)">Your response:</span> <i>"${esc(f.studentResponse)}"</i> <span class="tag g">${esc(f.status || 'acknowledged')}</span></div>` : `
+<div class="row" style="margin-top:10px;gap:8px"><input id="resp-${f.id}" placeholder="Type your response or acknowledge meeting..." style="flex:1"><button class="btn sec" data-a="respondFeedback" data-v="${f.id}">Send Response</button></div>`}
+</div>`).join('') : '<p class="mut">No feedback received from your teacher yet.</p>'}
+</div>
+
+<div class="card"><h2>Class Leaderboard</h2>
+<div class="tbl"><table><tr><th>Rank</th><th>Student</th><th>Score</th><th>Accuracy</th><th>Solved</th></tr>
+${ranking.length ? ranking.map(r => `<tr style="${r.studentId === me.id ? 'background:#b6ff3c10;font-weight:700' : ''}"><td>${rankBadge(r.rank)}</td><td>${esc(r.name)}${r.studentId === me.id ? ' (You)' : ''}</td><td><span class="badge" style="background:#b6ff3c22;color:var(--pri)">${r.score} pts</span></td><td>${r.accuracy}%</td><td>${r.solved}</td></tr>`).join('') : '<tr><td colspan="5" class="mut">No ranking data yet.</td></tr>'}
+</table></div></div>`;
 }
 async function practice(id) {
   const [set, prog] = await Promise.all([api('GET', '/practice/sets/' + id), api('GET', `/practice/sets/${id}/progress`)]);
@@ -577,6 +656,7 @@ function practiceView() {
   const { id, set, prog } = S.pr, i = S.qi, q = set.questions[i], p = prog.questions[i];
   const done = prog.solved === prog.total;
   return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">${esc(set.title)}</h2></div>
+<div class="practice-lock-banner">🔒 <b>AI Chatbot Assistant is NOT available during practice mode.</b> Use the 3 scaffolded clues below for targeted hints!</div>
 ${set.cheat.length ? `<div class="cheat pin"><b>Cheat sheet</b><ul style="margin:6px 0 0;padding-left:18px">${set.cheat.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
 <div class="card"><div class="prog"><div class="ring" style="--p:${Math.round(prog.solved / prog.total * 100)}"><b>${prog.solved}/${prog.total}</b></div><div><div class="mut">Your progress</div><b style="font-size:18px">${done ? 'Set complete' : 'Keep going'}</b></div></div>
 <div class="dots">${prog.questions.map((x, k) => `<button data-a="goQ" data-v="${k}" class="${k === i ? 'on' : ''} ${x.solved ? 'dn' : ''}">${k + 1}</button>`).join('')}</div>
@@ -610,9 +690,124 @@ async function history() {
   return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">Login history</h2></div><div class="card"><div class="tbl"><table><tr><th>When</th><th>Result</th><th>IP address</th></tr>${h.map(x => `<tr><td>${new Date(x.createdAt).toLocaleString()}</td><td>${x.success ? '<span class="tag g">Success</span>' : '<span class="tag r">Failed</span>'}</td><td>${esc(x.ip || '')}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">No history.</td></tr>'}</table></div></div>`;
 }
 
+/* ---------- AI Assistant Widget ---------- */
+function updateChatWidget() {
+  let root = $('#chatRoot');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'chatRoot';
+    document.body.appendChild(root);
+  }
+  if (!me || me.role !== 'student') {
+    root.innerHTML = '';
+    return;
+  }
+  const isPractice = location.hash.startsWith('#/practice/');
+  if (isPractice) {
+    S.chatOpen = false;
+    root.innerHTML = `
+      <button class="chat-fab locked" data-a="toggleChat" title="AI Chatbot is NOT available during practice">
+        🔒 AI Assistant (Locked in Practice)
+      </button>`;
+    return;
+  }
+
+  const msgsHtml = S.chatHistory.length
+    ? S.chatHistory.map(m => `<div class="chat-msg ${m.role}">${esc(m.text)}</div>`).join('')
+    : `<div class="chat-msg bot">👋 Hi ${esc(me.name)}! I'm your AI Study Buddy. Ask me any math or STEM questions. Note: I am automatically locked during live practice so you can test your true skills!</div>`;
+
+  root.innerHTML = `
+    <button class="chat-fab" data-a="toggleChat">
+      💬 Tutor AI Assistant
+    </button>
+    <div class="chat-modal" style="display:${S.chatOpen ? 'flex' : 'none'}">
+      <div class="chat-header">
+        <div class="pulse-badge" style="font-size:12px"><i class="pulse-dot g"></i> <b>Groq AI Assistant</b></div>
+        <button class="btn sec" style="padding:4px 8px;font-size:12px" data-a="toggleChat">✕</button>
+      </div>
+      <div class="chat-msgs" id="chatMsgsBox">
+        ${msgsHtml}
+      </div>
+      <div class="chat-input-bar">
+        <input id="chatInput" placeholder="Ask a study question..." data-enter-for="sendChat">
+        <button class="btn" data-a="sendChat">Send</button>
+      </div>
+    </div>
+  `;
+  if (S.chatOpen) {
+    const box = $('#chatMsgsBox');
+    if (box) box.scrollTop = box.scrollHeight;
+    const inp = $('#chatInput');
+    if (inp) setTimeout(() => inp.focus(), 50);
+  }
+}
+
 /* ---------- actions ---------- */
 const val = id => ($('#' + id) || {}).value || '';
 const A = {
+  tab(b, v) { S.tab = v; route(); },
+  selStudent(b, v) { S.activeStudent = JSON.parse(decodeURIComponent(v)); route(); },
+  async genAITemplate() {
+    if (!S.activeStudent) return toast('Select a student first.', true);
+    const area = val('fb-area').trim();
+    toast('Generating AI feedback template with Groq LPU...');
+    try {
+      const r = await api('POST', '/content/feedback-template', { studentName: S.activeStudent.name, areaToImprove: area });
+      const ta = $('#fb-text'); if (ta) ta.value = r.template || '';
+      toast('AI template generated! You can edit it manually.');
+    } catch (e) { toast('AI template error: ' + e.message, true); }
+  },
+  async sendStudentFeedback() {
+    if (!S.activeStudent) return toast('Select a student first.', true);
+    const text = val('fb-text').trim();
+    if (!text) return toast('Please enter or generate feedback to send.', true);
+    const area = val('fb-area').trim();
+    const mDate = val('fb-date').trim();
+    const mTime = val('fb-time').trim();
+    const mTopic = val('fb-topic').trim();
+    await api('POST', `/classes/${cid()}/feedback`, {
+      studentId: S.activeStudent.id,
+      studentName: S.activeStudent.name,
+      areaToImprove: area,
+      feedbackText: text,
+      meetingDate: mDate,
+      meetingTime: mTime,
+      meetingTopic: mTopic
+    });
+    toast('Feedback & meeting schedule sent to student!');
+    const ta = $('#fb-text'); if (ta) ta.value = '';
+    route();
+  },
+  async respondFeedback(b, v) {
+    const inp = $(`#resp-${v}`);
+    const respText = (inp ? inp.value : '').trim();
+    if (!respText) return toast('Please type your response or acknowledgment.', true);
+    await api('POST', `/classes/${cid()}/feedback/${v}/respond`, { response: respText });
+    toast('Response sent to teacher!');
+    route();
+  },
+  toggleChat() {
+    if (location.hash.startsWith('#/practice/')) {
+      return toast('🔒 AI Chatbot Assistant is locked during practice mode. Use the 3 scaffolded clues instead!', true);
+    }
+    S.chatOpen = !S.chatOpen;
+    updateChatWidget();
+  },
+  async sendChat() {
+    const input = $('#chatInput');
+    const text = (input ? input.value : '').trim();
+    if (!text) return;
+    S.chatHistory.push({ role: 'user', text });
+    input.value = '';
+    updateChatWidget();
+    try {
+      const r = await api('POST', '/content/assistant', { prompt: text });
+      S.chatHistory.push({ role: 'bot', text: r.reply || 'Here to help!' });
+    } catch (e) {
+      S.chatHistory.push({ role: 'bot', text: 'Error: ' + e.message });
+    }
+    updateChatWidget();
+  },
   async login() { try { await doLogin(val('f-email').trim(), val('f-pass')); } catch (e) { if (e.message !== 'expired') $('#aerr').textContent = e.message; } },
   async register() {
     try { await api('POST', '/auth/register', { name: val('f-name'), email: val('f-email').trim(), password: val('f-pass'), role: val('f-role') }); await doLogin(val('f-email').trim(), val('f-pass')); toast('Account created. Welcome!'); }
