@@ -12,7 +12,7 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || false }));
 app.use((req, res, next) => { res.set('X-Served-By', INSTANCE); next(); });
 // Clients may never forge identity headers.
 app.use((req, res, next) => { ['x-user-id', 'x-user-role', 'x-user-name', 'x-internal-key'].forEach(h => delete req.headers[h]); next(); });
-app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, try again later' } }));
+app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, try again later' } }));
 
 const ANY = ['admin', 'teacher', 'student'], ID = '(\\/[\\w.-]+)*';
 const R = p => new RegExp(`^\\/api\\/${p}$`);
