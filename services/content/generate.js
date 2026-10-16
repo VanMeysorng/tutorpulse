@@ -65,7 +65,7 @@ async function generate(notes) {
         method: 'POST', signal: AbortSignal.timeout(45000),
         headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + groqKey },
         body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are an expert STEM teaching assistant. Generate exactly up to 15 scaffolded questions and a cheatsheet based on lesson notes. Output ONLY valid JSON.' },
@@ -118,7 +118,7 @@ async function askAssistant(prompt) {
       method: 'POST', signal: AbortSignal.timeout(20000),
       headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + groqKey },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+        model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
         messages: [
           { role: 'system', content: 'You are TutorPulse AI Study Buddy. Help students understand STEM concepts, study methods, formulas, and conceptual intuition. Be encouraging, concise, and pedagogical. Never solve active exam questions directly; instead, guide their thinking with analogies.' },
           { role: 'user', content: prompt }
@@ -145,7 +145,7 @@ async function generateFeedbackTemplate(studentName, areaToImprove) {
       method: 'POST', signal: AbortSignal.timeout(15000),
       headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + groqKey },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+        model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
         messages: [
           { role: 'system', content: 'You are an encouraging STEM teacher writing brief, actionable feedback to a student. Keep it warm, constructive, and under 3 sentences.' },
           { role: 'user', content: `Write personalized teacher feedback for student "${studentName}" who needs improvement in "${areaToImprove || 'problem-solving strategy'}". Mention arranging a brief meeting to support them.` }
