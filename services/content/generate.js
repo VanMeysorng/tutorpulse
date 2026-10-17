@@ -57,6 +57,18 @@ function generateFallback(notes) {
   return { cheat: cheat.length ? cheat : ['Key concepts from notes'], questions, source: 'fallback' };
 }
 
+function parseQuestions(arr) {
+  if (!Array.isArray(arr)) throw new Error('questions missing');
+  const ok = [];
+  for (const item of arr) {
+    const r = Question.safeParse(item);
+    if (r.success) ok.push(r.data);
+  }
+  console.log('AI questions valid: ' + ok.length + ' of ' + arr.length);
+  if (ok.length < 10) throw new Error('only ' + ok.length + ' valid questions');
+  return ok.slice(0, 15);
+}
+
 async function generate(notes) {
   const groqKey = process.env.GROQ_API_KEY;
   if (groqKey) {
@@ -77,7 +89,7 @@ async function generate(notes) {
         const j = await r.json();
         const text = (j.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(text);
-        const questions = z.array(Question).max(20).parse(parsed.questions);
+        const questions = parseQuestions(parsed.questions);
         return { cheat: z.array(z.string()).max(10).parse(parsed.cheat || []), questions, source: 'ai' };
       } else {
         console.error('Groq API returned status:', r.status);
@@ -99,7 +111,7 @@ async function generate(notes) {
         const j = await r.json();
         const text = (j.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(text);
-        const questions = z.array(Question).max(20).parse(parsed.questions);
+        const questions = parseQuestions(parsed.questions);
         return { cheat: z.array(z.string()).max(10).parse(parsed.cheat || []), questions, source: 'ai' };
       }
     } catch (e) {
