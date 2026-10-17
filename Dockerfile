@@ -3,8 +3,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev && npm cache clean --force
-COPY common ./common
-COPY services ./services
+COPY --chown=node:node common ./common
+COPY --chown=node:node services ./services
 ARG SERVICE
 ENV SERVICE=${SERVICE}
 USER node

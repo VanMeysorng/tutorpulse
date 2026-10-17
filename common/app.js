@@ -5,18 +5,20 @@ const morgan = require('morgan');
 const mongoose = require('mongoose');
 const cfg = require('./config');
 
-exports.createApp = (name, { json = true } = {}) => {
+exports.createApp = (name, { json = true, db = true } = {}) => {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', true);
+  // Only trust X-Forwarded-For from our own private network (Nginx, gateways), so clients cannot spoof their IP.
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
   app.use(helmet());
   app.use(morgan(`[${name}] :method :url :status :response-time ms`));
   if (json) app.use(express.json({ limit: '1mb' }));
   app.use((req, res, next) => { res.set('X-Served-By', process.env.INSTANCE_ID || os.hostname()); next(); });
-  app.get('/health', (req, res) => res.json({
-    service: name, status: 'ok', instance: process.env.INSTANCE_ID || os.hostname(),
-    db: mongoose.connection.readyState === 1,
-  }));
+  app.get('/health', (req, res) => {
+    const body = { service: name, status: 'ok', instance: process.env.INSTANCE_ID || os.hostname() };
+    if (db) { body.db = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'; if (!body.db.startsWith('c')) body.status = 'degraded'; }
+    res.status(body.status === 'ok' ? 200 : 503).json(body);
+  });
   return app;
 };
 

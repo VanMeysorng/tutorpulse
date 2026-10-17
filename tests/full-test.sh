@@ -2,11 +2,11 @@
 # ==============================================================================
 # TUTORPULSE - COMPLETE END-TO-END MICROSERVICES & RUBRIC TEST PIPELINE
 # Run: ./tests/full-test.sh [BASE_URL]
-# Default BASE_URL: http://localhost:3080
+# Default BASE_URL: http://localhost
 # ==============================================================================
 
 
-BASE="${1:-http://localhost:3080}"
+BASE="${1:-http://localhost}"
 API="$BASE/api"
 RUN="$(date +%s)"
 GREEN='\033[0;32m'
@@ -176,7 +176,7 @@ assert_status "5B: Student Requests Clue #1" 200 "$STATUS" "$BODY"
 RES=$(call_api "POST" "$API/practice/sets/$SET_ID/questions/0/attempt" "$STUDENT_TOKEN" "{\"answer\":\"b^2 - 4ac\"}")
 STATUS=$(echo "$RES" | tail -n1)
 BODY=$(echo "$RES" | sed '$d')
-assert_status "5C: Student Submits Correct Answer" 200 "$STATUS" "$BODY"
+assert_status "5C: Student Submits Correct Answer" 201 "$STATUS" "$BODY"
 
 RES=$(call_api "GET" "$API/practice/sets/$SET_ID/progress" "$STUDENT_TOKEN" "")
 STATUS=$(echo "$RES" | tail -n1)

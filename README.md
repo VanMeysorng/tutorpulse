@@ -1,92 +1,180 @@
-# TutorPulse: AI STEM Tutoring and Classroom Analytics (Backend)
+# TutorPulse: AI-Assisted STEM Practice and Classroom Gap Analytics (Microservices Backend)
 
-Full-stack project: a web frontend (`web/`, served by Nginx) plus a microservices backend with API Gateway, JWT authentication, role-based authorization (admin, teacher, student), MongoDB, Docker, an Nginx load balancer and a 4-instance EC2 deployment.
+TutorPulse lets teachers turn lesson notes into practice sets, lets students practise with up to three clues per question, and streams every attempt to an analytics service that shows teachers which concepts the class is struggling with.
 
-Team layout (edit names): **Member 1** owns class-service and content-service. **Member 2** owns practice-service and analytics-service. Both share gateway, registration and login. Total = 3 common + 2 + 2 = **7 microservices**.
+The backend has 7 Node.js microservices behind an API Gateway that checks JWTs and enforces role-based access control (RBAC). Each service has its own MongoDB database. It runs in Docker on 4 EC2 instances, with an Nginx load balancer in front of two gateway replicas. `web/` is an optional demo UI and is not part of the graded backend.
+
+**Roles:** `admin`, `teacher`, `student`.
+**Source:** https://github.com/VanMeysorng/tutorpulse
 
 ## 1. Architecture
 
 ```
-Client / Postman
-      |  :80
- [Nginx LB] --round robin--> [API Gateway 1]  [API Gateway 2]     (X-Served-By shows which)
-                                   |  verifies JWT, enforces RBAC, adds x-user-* + x-internal-key
-   +---------+---------+---------+----------+-----------+
-   |         |         |         |          |           |
-Registration Login   Classes   Content   Practice   Analytics
- :3001      :3002     :3003     :3004     :3005      :3006
- tp_auth   tp_login  tp_classes tp_content tp_practice tp_analytics   (one MongoDB, one database per service)
+                       Postman / client
+                             | HTTP :80
+                  +----------v-----------+  EC2-1
+                  |  Nginx load balancer |  round robin + failover
+                  +-----+----------+-----+
+                        |          |
+           gateway-1 :3000      gateway-2 :3007 (host port)   EC2-1 / EC2-2
+           verifies JWT, deny-by-default RBAC table,
+           adds x-user-* headers + secret x-internal-key
+                        |
+   +-----------+--------+---+-----------+------------+-------------+
+   |           |            |           |            |             |
+registration  login      classes     content     practice     analytics
+  :3001       :3002       :3003       :3004        :3005         :3006
+  EC2-2       EC2-2       EC2-3       EC2-3        EC2-4         EC2-4
+ tp_auth    tp_login   tp_classes  tp_content  tp_practice  tp_analytics
+                                    MongoDB 7 :27017 (EC2-4)
 ```
 
-| # | Microservice | Port | Owner | EC2 | Database |
+| # | Microservice | Port | EC2 | Database | Base URL (through the load balancer) |
 |---|---|---|---|---|---|
-| 1 | api-gateway (x2 replicas) | 3000 | Shared | EC2-1, EC2-2 | none |
-| 2 | registration-service | 3001 | Shared | EC2-2 | tp_auth |
-| 3 | login-service | 3002 | Shared | EC2-2 | tp_login |
-| 4 | class-service | 3003 | Member 1 | EC2-3 | tp_classes |
-| 5 | content-service | 3004 | Member 1 | EC2-3 | tp_content |
-| 6 | practice-service | 3005 | Member 2 | EC2-4 | tp_practice |
-| 7 | analytics-service | 3006 | Member 2 | EC2-4 | tp_analytics |
-| - | Nginx load balancer | 80 | Shared | EC2-1 | none |
-| - | MongoDB 7 | 27017 | Shared | EC2-4 | all of the above |
+| 1 | api-gateway (x2) | 3000 (gateway-2 on host 3007) | EC2-1, EC2-2 | none | `http://<EC2-1-IP>/api` |
+| 2 | registration-service | 3001 | EC2-2 | tp_auth | `/api/auth/register`, `/api/users/me`, `/api/admin/users` |
+| 3 | login-service | 3002 | EC2-2 | tp_login | `/api/auth/login`, `/api/auth/me`, `/api/auth/history` |
+| 4 | class-service | 3003 | EC2-3 | tp_classes | `/api/classes` |
+| 5 | content-service | 3004 | EC2-3 | tp_content | `/api/content` |
+| 6 | practice-service | 3005 | EC2-4 | tp_practice | `/api/practice` |
+| 7 | analytics-service | 3006 | EC2-4 | tp_analytics | `/api/analytics` |
+| - | Nginx load balancer | 80 | EC2-1 | - | `http://<EC2-1-IP>` |
+| - | MongoDB 7 | 27017 | EC2-4 | 6 databases | private only |
 
-**Frontend.** `web/` is a static single-page site (HTML, CSS, JS, no build step). Nginx on EC2-1 serves it and forwards `/api/*` to the gateways, so the browser only ever talks to one address. Screens: landing page, register and login (real JWT), teacher dashboard (classes, practice sets, set editor, class code, Gap Radar with heatmap and CSV export), student dashboard (join by code, practice with clues and progress), admin console (users, roles, all classes), login history.
+Services 1–3 are the common services. Member 1 builds class-service and content-service; Member 2 builds practice-service and analytics-service. That gives 3 + 2 + 2 = 7 microservices.
 
-**Request flow.** Client calls `/api/...`. The gateway rejects forged identity headers, checks the path against a deny-by-default RBAC table, verifies the JWT (HS256, issuer, expiry), compares the role, then forwards the request with `x-user-id`, `x-user-role` and a secret `x-internal-key`. Every downstream service returns 403 to anything without the internal key, so the services cannot be used directly. Each service re-checks the role (defense in depth). Services call each other over HTTP with the internal key (login to registration, content/practice/analytics to class-service, practice to content, practice to analytics for the telemetry stream).
+**Request flow:** Nginx sends `/api/*` to one of the two gateways. The gateway strips any identity headers sent by the client and matches the method and path against a deny-by-default rule table. It then verifies the JWT (HS256, issuer, expiry), checks the role, and forwards the request with `x-user-id`, `x-user-role` and a secret `x-internal-key`. Every service answers 403 when that key is missing, so a service cannot be called directly. Each service also checks the role again itself.
 
-## 2. Roles and access (enforced at the gateway and again in each service)
+## 2. APIs per microservice (all through `http://<EC2-1-IP>`)
 
-| Resource | admin | teacher | student |
+Postman numbers (for example `4.9`) refer to `scripts/TutorPulse.postman_collection.json`.
+
+### registration-service :3001 (tp_auth.users)
+| Method | Path | Role | Purpose |
 |---|---|---|---|
-| Register / login | public | public | public |
-| `GET /api/auth/me`, `/history` | yes | yes | yes |
-| `/api/admin/users*` | yes | no | no |
-| Create / edit / delete class, regenerate code | no | own classes | no |
-| `GET /api/classes*` | all | own | joined (no code shown) |
-| `POST /api/classes/join` | no | no | yes |
-| Content create / edit / publish / delete | no | own classes | no |
-| `GET /api/content*` | no | own | published only, answers and clues hidden |
-| `/api/practice*` | no | no | joined classes only |
-| `/api/analytics*` | read | own classes only | no |
+| POST | /api/auth/register | public | Sign up as teacher or student (admin cannot self-register) |
+| GET | /api/users/me | any | Read my profile |
+| PUT | /api/users/me | any | Update my name and/or password (needs current password) |
+| POST | /api/admin/users | admin | Create a user with any role |
+| GET | /api/admin/users?role=&search=&page=&limit= | admin | List / filter / search users |
+| GET | /api/admin/users/:id | admin | Read one user |
+| PUT | /api/admin/users/:id | admin | Update name, email, role |
+| PATCH | /api/admin/users/:id/role | admin | Change role only |
+| DELETE | /api/admin/users/:id | admin | Delete user + cascade (classes, attempts, events, login records) |
 
-## 3. APIs (all through the gateway at `http://<LB-IP>/api`)
+### login-service :3002 (tp_login.loginaudits)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| POST | /api/auth/login | public | Returns JWT; 5 failed logins in 15 min locks the email |
+| GET | /api/auth/me | any | Identity from the token |
+| GET | /api/auth/history | any | My last 20 logins |
+| DELETE | /api/auth/history/:id | any | Delete one of my login records |
+| DELETE | /api/auth/history | any | Clear my login history (failed attempts are kept for the lockout) |
 
-**registration-service :3001**: `POST /auth/register` (teacher or student), `GET /admin/users`, `GET /admin/users/:id`, `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id`; internal `POST /internal/verify`, `POST /internal/lookup` (names for dashboards).
-**login-service :3002**: `POST /auth/login` (returns JWT, 5 failures in 15 min locks the email), `GET /auth/me`, `GET /auth/history`.
-**class-service :3003**: `POST /classes`, `GET /classes`, `GET /classes/:id`, `PUT /classes/:id`, `DELETE /classes/:id`, `POST /classes/join`, `POST /classes/:id/regenerate-code`, `GET /classes/:id/students`; internal `GET /internal/classes/:id`.
-**content-service :3004**: `POST /content/classes/:classId/sets`, `GET /content/classes/:classId/sets`, `GET /content/sets/:id`, `PUT /content/sets/:id`, `POST /content/sets/:id/publish`, `POST /content/sets/:id/regenerate`, `DELETE /content/sets/:id`; internal `GET /internal/sets/:id`. Uses the Claude API for generation when `ANTHROPIC_API_KEY` is set.
-**practice-service :3005**: `GET /practice/sets/:setId`, `GET /practice/sets/:setId/progress`, `POST /practice/sets/:setId/questions/:qi/attempt`, `POST /practice/sets/:setId/questions/:qi/clue` (max 3, enforced server-side by a unique index).
-**analytics-service :3006**: `GET /analytics/classes/:classId/radar`, `/students`, `/concepts`, `/matrix`, `/export.csv`; internal `POST /internal/events`.
+### class-service :3003 (tp_classes.classes, tp_classes.feedbacks)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| POST | /api/classes | teacher | Create class (unique 6-character code) |
+| GET | /api/classes | any | Teacher: own, student: joined (code hidden), admin: all |
+| GET | /api/classes/:id | any (member/owner) | Read class |
+| PUT | /api/classes/:id | teacher (owner) | Rename |
+| DELETE | /api/classes/:id | teacher (owner) | Delete + cascade to content, practice, analytics |
+| POST | /api/classes/join | student | Join with code |
+| POST | /api/classes/:id/leave | student | Leave class |
+| POST | /api/classes/:id/regenerate-code | teacher (owner) | New join code |
+| GET | /api/classes/:id/students | teacher (owner) | Roster with names |
+| DELETE | /api/classes/:id/students/:studentId | teacher (owner) | Remove a student |
+| POST | /api/classes/:id/feedback | teacher (owner) | Feedback + meeting for a student in the class |
+| GET | /api/classes/:id/feedback | any (member/owner) | List (students see only their own) |
+| GET | /api/classes/:id/feedback/:fid | any (member/owner) | Read one |
+| PUT | /api/classes/:id/feedback/:fid | teacher (owner) | Edit feedback / meeting |
+| DELETE | /api/classes/:id/feedback/:fid | teacher (owner) | Delete feedback |
+| POST | /api/classes/:id/feedback/:fid/respond | student | Acknowledge or ask to reschedule |
 
-## 4. Collections and schemas
-`users {name, email(unique), passwordHash(bcrypt), role}` | `loginaudits {email, userId, success, ip}` | `classes {name, code(unique), teacherId, studentIds[]}` | `practicesets {classId, teacherId, title, notes, cheat[], questions[{type, q, options, answer, concept, clues[3]}], published, source}` | `attempts {studentId, classId, setId, qIndex, type(attempt|clue), correct, clueNo}` | `events {classId, setId, studentId, qIndex, concept, type, correct}`. Schema code is in each `services/*/index.js` (screenshot the `new mongoose.Schema` blocks).
+### content-service :3004 (tp_content.practicesets)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| POST | /api/content/classes/:classId/sets | teacher (owner) | Create set; AI (Groq) builds 10-15 questions from notes |
+| GET | /api/content/classes/:classId/sets | teacher, student | List (students: published only, no answers) |
+| GET | /api/content/sets/:id | teacher, student | Read one (answers and clues hidden from students) |
+| PUT | /api/content/sets/:id | teacher (owner) | Update title, notes, cheat sheet, questions |
+| POST | /api/content/sets/:id/publish | teacher (owner) | Publish / unpublish |
+| POST | /api/content/sets/:id/regenerate | teacher (owner) | Re-run AI generation |
+| DELETE | /api/content/sets/:id | teacher (owner) | Delete + cascade to practice and analytics |
+| POST | /api/content/assistant | any | AI study assistant |
+| POST | /api/content/feedback-template | teacher | AI-drafted feedback text |
+
+### practice-service :3005 (tp_practice.attempts)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| GET | /api/practice/sets/:setId | student (member) | Open set with my progress |
+| GET | /api/practice/sets/:setId/progress | student | Solved / attempts / clues per question |
+| GET | /api/practice/sets/:setId/attempts | student | My attempt and clue log |
+| POST | /api/practice/sets/:setId/questions/:qi/attempt | student | Submit answer (graded on the server) |
+| POST | /api/practice/sets/:setId/questions/:qi/clue | student | Next clue (max 3, unique index) |
+| DELETE | /api/practice/sets/:setId/questions/:qi/attempts | student | Reset one question |
+| DELETE | /api/practice/sets/:setId/progress | student | Reset the whole set |
+
+### analytics-service :3006 (tp_analytics.events, tp_analytics.interventions)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| GET | /api/analytics/classes/:classId/radar | teacher (owner), admin | Wrong-rate and clue use per question (Gap Radar) |
+| GET | /api/analytics/classes/:classId/students | teacher, admin | Per-student summary |
+| GET | /api/analytics/classes/:classId/concepts | teacher, admin | Weakest concepts first |
+| GET | /api/analytics/classes/:classId/matrix | teacher, admin | Student x question heatmap |
+| GET | /api/analytics/classes/:classId/export.csv | teacher, admin | CSV export |
+| GET | /api/analytics/classes/:classId/ranking | any (member/owner) | Leaderboard |
+| POST | /api/analytics/classes/:classId/interventions | teacher (owner) | Action plan for a weak concept (stores a radar snapshot) |
+| GET | /api/analytics/classes/:classId/interventions?status=&priority= | teacher, admin | List |
+| GET | /api/analytics/classes/:classId/interventions/:id | teacher, admin | Read one |
+| PUT | /api/analytics/classes/:classId/interventions/:id | teacher (owner) | Update status / action / outcome |
+| DELETE | /api/analytics/classes/:classId/interventions/:id | teacher (owner) | Delete |
+
+Internal endpoints such as `/internal/...` (credential check, name lookup, telemetry, cascade cleanup) need the internal key and cannot be reached through the gateway.
+
+## 3. CRUD coverage
+
+| Collection (database) | Create | Read | Update | Delete |
+|---|---|---|---|---|
+| users (tp_auth) | register, admin create | me, list, search, one | me (name/password), admin PUT/PATCH | admin delete (cascade) |
+| loginaudits (tp_login) | on every login | history | - (audit log) | one record, clear all |
+| classes (tp_classes) | create, join | list, one, roster | rename, new code | delete (cascade), remove student, leave |
+| feedbacks (tp_classes) | create | list, one | edit, student respond | delete |
+| practicesets (tp_content) | create (+AI) | list, one | edit, publish, regenerate | delete (cascade) |
+| attempts (tp_practice) | attempt, clue | progress, attempt log | - (immutable record) | reset question, reset set |
+| events (tp_analytics) | telemetry stream | radar, students, concepts, matrix, ranking, CSV | - (immutable) | cascade on class/set/user delete |
+| interventions (tp_analytics) | create | list, one | update | delete |
+
+## 4. Schemas
+Each schema is the `new mongoose.Schema({...})` block at the top of `services/<name>/index.js`.
+`users {name, email (unique), passwordHash (bcrypt), role}` · `loginaudits {email, userId, success, ip}` · `classes {name, code (unique), teacherId, studentIds[]}` · `feedbacks {classId, teacherId, studentId, studentName, areaToImprove, feedbackText, meetingDate, meetingTime, meetingTopic, studentResponse, status}` · `practicesets {classId, teacherId, title, notes, cheat[], questions[{type, q, options, answer, concept, clues[3]}], published, source}` · `attempts {studentId, classId, setId, qIndex, type, correct, clueNo, answer}` · `events {classId, setId, studentId, qIndex, concept, type, correct}` · `interventions {classId, teacherId, concept, setId, action, priority, status, dueDate, outcome, snapshot}`. All collections have `createdAt`/`updatedAt` and indexes on their lookup fields.
 
 ## 5. Run locally
 ```bash
-cp .env.example .env            # then replace the secrets (command inside the file)
+cp .env.example .env      # replace every change-me value (generator command is in the file)
 COMPOSE_PROFILES=all docker compose up -d --build
-# open http://localhost in a browser (landing page, register, log in)
-node tests/smoke.js http://localhost      # 55+ automated API checks
-# first admin login: ADMIN_EMAIL / ADMIN_PASSWORD from .env
+npm run test:all          # smoke + CRUD tests and pipeline tests against http://localhost
 ```
 
-## 5b. See the UI first (no backend, no Docker)
-Double-click `web/index.html`, or run `cd web && python3 -m http.server 8000` and open `http://localhost:8000/?demo`. `web/demo.js` fakes the API in memory so every screen works. Log in as `teacher@demo.com`, `student@demo.com` or `admin@demo.com` (any password). Class code `ABC234` joins the sample class. Data resets on refresh. On the real deployment `demo.js` stays inactive.
+## 6. Deploy on 4 EC2 instances (Ubuntu, t3.small or larger)
+1. **Security groups.** EC2-1: 80 and 22 open to the internet. EC2-2/3/4: 22 from your IP only. Ports 3000-3007 and 27017 open only to the security group itself. Never expose 27017 publicly.
+2. **On each instance:** install Docker (`curl -fsSL https://get.docker.com | sh`), `git clone`, `cp .env.ec2.example .env`. Fill in the four private IPs and real secrets, using the same `.env` on all four. Note that `GATEWAY_2` uses port **3007**.
+3. **Start in this order:** EC2-4 `docker compose --profile data up -d --build`, EC2-3 `--profile learning`, EC2-2 `--profile core`, EC2-1 `--profile edge`.
+4. In Postman, import `scripts/TutorPulse.postman_collection.json`. Set the `baseUrl` variable to `http://<EC2-1-PUBLIC-IP>` and set `adminEmail`/`adminPassword`, then run folders 0-9 in order.
 
-## 6. Deploy on 4 EC2 instances (Ubuntu 22.04, t3.small or larger)
-1. Security groups. **EC2-1**: 80 and 22 open to the internet. **EC2-2/3/4**: 22 from your IP; ports 3000-3006 and 27017 open **only to the security group itself** (private traffic). Never expose 27017 publicly.
-2. On each instance: install Docker (`curl -fsSL https://get.docker.com | sh`), clone the repo, `cp .env.ec2.example .env`, fill secrets and the four **private** IPs.
-3. Start in this order: EC2-4 `docker compose --profile data up -d --build`, EC2-3 `--profile learning`, EC2-2 `--profile core`, EC2-1 `--profile edge`.
-4. Open `http://<EC2-1-PUBLIC-IP>` in a browser for the website. Test the API: `node tests/smoke.js http://<EC2-1-PUBLIC-IP>` or import `scripts/TutorPulse.postman_collection.json` and set `baseUrl`.
+> MongoDB only reads `MONGO_PASSWORD` the first time it creates its data volume. If you change the password later, run `docker compose --profile data down -v` on EC2-4 (this wipes the data).
 
-## 7. Load balancer demonstration
-Nginx (`nginx/default.conf.template`) serves the website and balances `/api` between the EC2-1 gateway and the EC2-2 gateway. Run `curl -i http://<EC2-1-IP>/health` several times: `X-Served-By` alternates between `gateway-1` and `gateway-2`. Then `docker stop` one gateway and repeat: all requests are still served (failover). Screenshot both.
+## 7. Load balancer
+`nginx/default.conf.template` defines `upstream gateways { gateway-1; gateway-2 }` (round robin, `max_fails`, `proxy_next_upstream`). Send `GET http://<EC2-1-IP>/health` several times: `X-Served-By` and `X-LB-Upstream` alternate between gateway-1 and gateway-2. To show failover, run `docker stop` on gateway-1, then request `/health` again: gateway-2 still answers. On `/api` calls, the `X-Gateway` response header names the gateway that handled the request.
 
 ## 8. Screenshot checklist (matches the submission document)
-1. Each `mongoose.Schema` block. 2. Postman call per API on the EC2 public IP, plus MongoDB (`docker exec -it <mongo> mongosh -u tpuser`, `show dbs`, `db.users.find()`). 3. `nginx/default.conf.template` and the alternating `X-Served-By`. 4. Tests in folder "7 Security tests": wrong password (401), invalid token (401), student token on teacher route (403), teacher token on admin route (403), other teacher's analytics (403), student 4th clue (409). 5. `docker ps` on each instance.
+1. Each `mongoose.Schema` block, plus `docker exec -it <mongo> mongosh -u tpuser -p` → `show dbs`, then `use tp_auth` → `db.users.find()`, and the same for the other databases.
+2. Every Postman request in folders 1–7 and 9, against the EC2 public IP.
+3. `nginx/default.conf.template`, `docker-compose.yml`, and `/health` alternating between gateways (Postman 0.1).
+4. Security tests (folder 8): wrong password 401, invalid token 401, one role's token on another role's route 403.
+5. `docker ps` on each of the 4 instances.
 
-## 9. Rubric mapping
-Docker and distribution: one image per service, non-root user, health checks, restart policy, 7 services on 4 hosts. JWT/RBAC: gateway verification, deny-by-default route table, per-service role checks, internal key. Database/CRUD: full CRUD on users, classes and practice sets, one database per service. Load balancer: 2 gateway replicas behind Nginx with failover. Documentation: this file.
-
-## 10. Known limits (be ready to explain)
-Access tokens only (no refresh or revocation list). Tokens last 1 hour. MongoDB is a single node (add a replica set for production). Without `ANTHROPIC_API_KEY`, generated sets start empty and the teacher adds questions manually.
+## 9. Known limits
+- Access tokens only, valid for 1 hour, with no refresh token or revocation list. A role change takes effect at the next login.
+- MongoDB runs as a single node.
+- Without `GROQ_API_KEY`, a simple offline generator builds fill-in-the-blank questions from the notes.

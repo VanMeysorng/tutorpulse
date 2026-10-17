@@ -13,3 +13,12 @@ exports.requireClassAccess = async (classId, user, { ownerOnly = false } = {}) =
   if (ownerOnly ? !owner : !(owner || member)) throw httpError(403, 'You do not have access to this class');
   return c;
 };
+// Cascade delete: ask other services to remove data that belongs to a deleted class or user.
+// Best effort: one service being down must not block the delete, so failures are logged and reported.
+exports.cascade = async (targets, path) => {
+  const out = await Promise.all(targets.map(async t => {
+    try { const r = await call(cfg.urls[t], path, { method: 'DELETE' }); return [t, r.deleted ?? 0]; }
+    catch (e) { console.error(`cascade ${t}${path} failed: ${e.message}`); return [t, 'failed']; }
+  }));
+  return Object.fromEntries(out);
+};

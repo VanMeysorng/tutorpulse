@@ -15,45 +15,33 @@ const PROMPT = `You are an expert STEM teaching assistant. From the lesson notes
 Each question item: {"type":"mcq"|"num","q":string,"options":[4 strings, mcq only],"answer":string (mcq: exactly one option; num: plain number),"concept":string,"clues":[rule recall, strategy focus, first-step setup]}.
 Clues must never state the final answer. Questions should be scaffolded from foundational to advanced application.\n\nNOTES:\n`;
 
+// Used when no AI key is configured: builds simple fill-in-the-blank questions from the notes.
+// Clues guide the student but never reveal the answer.
+const STOP = /^(the|this|that|with|from|where|which|about|there|their|these|those|when|then|than|into|over|under|between|because)$/i;
 function generateFallback(notes) {
-  const lines = notes.split('\n').map(s => s.trim()).filter(s => s.length > 5);
-  const cheat = lines.slice(0, 8);
-  const questions = [];
+  const lines = notes.split(/\n|(?<=[.;])\s+/).map(s => s.trim()).filter(s => s.length > 5);
+  const cheat = lines.slice(0, 8).map(l => l.slice(0, 200));
   const candidates = lines.filter(s => s.length >= 8 && s.length <= 250);
-  const targetCount = Math.min(15, Math.max(5, candidates.length));
-  for (let i = 0; i < targetCount; i++) {
-    const text = candidates[i % candidates.length] || `Formula application ${i + 1}`;
-    const words = text.split(/\s+/);
-    const concept = words.slice(0, 3).join(' ') || 'Key Concept';
-    const numMatch = text.match(/-?\d+(\.\d+)?/);
-    if (numMatch && i % 2 === 1) {
-      const ansVal = numMatch[0];
-      const qText = text.replace(ansVal, '___');
-      questions.push({
-        type: 'num',
-        q: `Q${i + 1}: Numerical problem - solve for the missing term: ${qText}`,
-        answer: String(ansVal),
-        concept: concept.slice(0, 40),
-        clues: [`Review rule for ${concept}`, `Look at context: ${text.slice(0, 50)}`, `Evaluates to ${ansVal}`]
-      });
-    } else {
-      const targetWord = words.find(w => w.length > 4 && !/^(the|this|that|with|from|where|which|about)$/i.test(w)) || words[0] || 'term';
-      const cleanWord = targetWord.replace(/[^\w]/g, '');
-      if (!cleanWord) continue;
-      const qText = text.replace(targetWord, '___');
-      const options = Array.from(new Set([cleanWord, 'Inverse relation', 'Constant factor', 'Null set', 'Differential limit'])).slice(0, 4);
-      while (options.length < 4) options.push(`Variant ${options.length + 1}`);
-      options.sort(() => Math.random() - 0.5);
-      questions.push({
-        type: 'mcq',
-        q: `Q${i + 1}: Fill in the missing STEM concept: ${qText}`,
-        options,
-        answer: cleanWord,
-        concept: concept.slice(0, 40),
-        clues: [`Definition of ${concept}`, `Begins with '${cleanWord[0].toUpperCase()}'`, `Selected term is ${cleanWord}`]
-      });
+  const vocab = [...new Set(notes.split(/\s+/).map(w => w.replace(/[^\w-]/g, '')).filter(w => w.length > 4 && /^[A-Za-z][A-Za-z-]+$/.test(w) && !STOP.test(w)))];
+  const questions = [];
+  candidates.slice(0, 15).forEach((text, i) => {
+    const concept = (text.split(/[:=,]/)[0].split(/\s+/).slice(0, 4).join(' ') || 'Key concept').slice(0, 60);
+    const num = text.match(/-?\d+(\.\d+)?/);
+    if (num && i % 2 === 1) {
+      questions.push({ type: 'num', q: `Fill in the missing number: ${text.replace(num[0], '___')}`.slice(0, 500), answer: num[0], concept,
+        clues: [`Recall the rule or value for "${concept}" from the lesson notes.`, 'Check the units and what quantity the blank represents.', 'Write out the full statement and solve for the blank.'] });
+      return;
     }
-  }
+    const words = text.split(/\s+/);
+    const target = words.find(w => w.replace(/[^\w-]/g, '').length > 4 && !STOP.test(w.replace(/[^\w-]/g, '')));
+    const answer = target && target.replace(/[^\w-]/g, '');
+    if (!answer) return;
+    const distractors = vocab.filter(w => w.toLowerCase() !== answer.toLowerCase()).sort(() => Math.random() - 0.5).slice(0, 3);
+    if (distractors.length < 3) return;
+    const options = [answer, ...distractors].sort(() => Math.random() - 0.5);
+    questions.push({ type: 'mcq', q: `Which term completes the statement? ${text.replace(target, '___')}`.slice(0, 500), options, answer, concept,
+      clues: [`Think about the definition of "${concept}".`, 'Eliminate options that do not fit the grammar or units of the sentence.', `The missing term has ${answer.length} letters.`] });
+  });
   return { cheat: cheat.length ? cheat : ['Key concepts from notes'], questions, source: 'fallback' };
 }
 
@@ -96,26 +84,6 @@ async function generate(notes) {
       }
     } catch (e) {
       console.error('Groq AI error:', e.message);
-    }
-  }
-
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (key) {
-    try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', signal: AbortSignal.timeout(60000),
-        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5', max_tokens: 4000, messages: [{ role: 'user', content: PROMPT + notes.slice(0, 8000) }] }),
-      });
-      if (r.ok) {
-        const j = await r.json();
-        const text = (j.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(text);
-        const questions = parseQuestions(parsed.questions);
-        return { cheat: z.array(z.string()).max(10).parse(parsed.cheat || []), questions, source: 'ai' };
-      }
-    } catch (e) {
-      console.error('Anthropic AI error:', e.message);
     }
   }
 

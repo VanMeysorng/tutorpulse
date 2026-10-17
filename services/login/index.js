@@ -4,12 +4,13 @@ const { z } = require('zod');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { createApp, finish, start } = require('../../common/app');
-const { trustGateway } = require('../../common/auth');
+const { trustGateway, internal } = require('../../common/auth');
 const { call } = require('../../common/http');
-const { wrap, httpError } = require('../../common/util');
+const { wrap, httpError, oid } = require('../../common/util');
 
 const audit = new mongoose.Schema({ email: String, userId: String, success: Boolean, ip: String }, { timestamps: true });
 audit.index({ email: 1, createdAt: -1 });
+audit.index({ userId: 1, createdAt: -1 });
 const Audit = mongoose.model('LoginAudit', audit);
 
 const app = createApp('login-service');
@@ -35,7 +36,23 @@ app.get('/me', wrap(async (req, res) => {
 }));
 app.get('/history', wrap(async (req, res) => {
   if (!req.user) throw httpError(401, 'Authentication required');
-  res.json(await Audit.find({ userId: req.user.id }).sort('-createdAt').limit(20).select('-_id success ip createdAt'));
+  const items = await Audit.find({ userId: req.user.id }).sort('-createdAt').limit(20).select('success ip createdAt').lean();
+  res.json(items.map(a => ({ id: String(a._id), success: a.success, ip: a.ip, createdAt: a.createdAt })));
+}));
+// Delete one login record, or clear the whole history. Failed attempts stay (they drive the lockout).
+app.delete('/history/:id', wrap(async (req, res) => {
+  if (!req.user) throw httpError(401, 'Authentication required');
+  const r = await Audit.deleteOne({ _id: oid(req.params.id), userId: req.user.id });
+  if (!r.deletedCount) throw httpError(404, 'Login record not found');
+  res.status(204).end();
+}));
+app.delete('/history', wrap(async (req, res) => {
+  if (!req.user) throw httpError(401, 'Authentication required');
+  const r = await Audit.deleteMany({ userId: req.user.id });
+  res.json({ deleted: r.deletedCount });
+}));
+app.delete('/internal/users/:id', internal, wrap(async (req, res) => {
+  const r = await Audit.deleteMany({ userId: req.params.id }); res.json({ deleted: r.deletedCount });
 }));
 finish(app);
 start(app, 'login-service');

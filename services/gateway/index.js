@@ -6,10 +6,11 @@ const cfg = require('../../common/config');
 cfg.need('JWT_SECRET', 'INTERNAL_KEY');
 const { createApp, finish } = require('../../common/app');
 
-const app = createApp('api-gateway', { json: false });
+const app = createApp('api-gateway', { json: false, db: false });
 const INSTANCE = process.env.INSTANCE_ID || require('os').hostname();
 app.use(cors({ origin: process.env.CORS_ORIGIN || false }));
-app.use((req, res, next) => { res.set('X-Served-By', INSTANCE); next(); });
+// X-Gateway survives proxying (downstream services set their own X-Served-By on /api responses).
+app.use((req, res, next) => { res.set('X-Served-By', INSTANCE); res.set('X-Gateway', INSTANCE); next(); });
 // Clients may never forge identity headers.
 app.use((req, res, next) => { ['x-user-id', 'x-user-role', 'x-user-name', 'x-internal-key'].forEach(h => delete req.headers[h]); next(); });
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, try again later' } }));
@@ -18,27 +19,34 @@ const ANY = ['admin', 'teacher', 'student'], ID = '(\\/[\\w.-]+)*';
 const R = p => new RegExp(`^\\/api\\/${p}$`);
 // First match wins. No match = denied.
 const RULES = [
+  // registration + login (common services)
   ['POST', R('auth\\/(register|login)'), 'public'],
-  ['GET', R('auth\\/(me|history)'), ANY],
+  ['GET', R('auth\\/me'), ANY],
+  ['*', R(`auth\\/history${ID}`), ANY],
+  ['*', R('users\\/me'), ANY],
   ['*', R(`admin\\/users${ID}`), ['admin']],
+  // class-service
   ['POST', R('classes\\/join'), ['student']],
+  ['POST', R('classes\\/[\\w.-]+\\/leave'), ['student']],
   ['POST', R('classes\\/[\\w.-]+\\/feedback\\/[\\w.-]+\\/respond'), ['student']],
-  ['GET', R('classes\\/[\\w.-]+\\/feedback'), ANY],
-  ['POST', R('classes\\/[\\w.-]+\\/feedback'), ['teacher']],
   ['GET', R(`classes${ID}`), ANY],
   ['*', R(`classes${ID}`), ['teacher']],
+  // content-service
   ['POST', R('content\\/assistant'), ANY],
-  ['POST', R('content\\/feedback-template'), ['teacher', 'admin']],
+  ['POST', R('content\\/feedback-template'), ['teacher']],
   ['GET', R(`content${ID}`), ['teacher', 'student']],
   ['*', R(`content${ID}`), ['teacher']],
+  // practice-service
   ['*', R(`practice${ID}`), ['student']],
+  // analytics-service
   ['GET', R('analytics\\/classes\\/[\\w.-]+\\/ranking'), ANY],
   ['GET', R(`analytics${ID}`), ['teacher', 'admin']],
+  ['*', R(`analytics\\/classes\\/[\\w.-]+\\/interventions${ID}`), ['teacher']],
 ];
 
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
-  if (/\.\.|\/\/|%2e|%2f|%5c/i.test(req.originalUrl)) return res.status(400).json({ error: 'Bad path' });
+  if (/\.\.|\/\/|%2e|%2f|%5c/i.test(req.originalUrl.split('?')[0])) return res.status(400).json({ error: 'Bad path' });
   const rule = RULES.find(r => (r[0] === '*' || r[0] === req.method) && r[1].test(req.path));
   if (!rule) return res.status(403).json({ error: 'Route not allowed' });
   if (rule[2] !== 'public') {
@@ -62,7 +70,8 @@ const P = (target, test, rewrite) => createProxyMiddleware({
 });
 app.use(P(cfg.urls.registration, /^\/api\/auth\/register$/, [/^\/api\/auth/, '']));
 app.use(P(cfg.urls.registration, /^\/api\/admin\/users/, [/^\/api\/admin/, '']));
-app.use(P(cfg.urls.login, /^\/api\/auth\/(login|me|history)$/, [/^\/api\/auth/, '']));
+app.use(P(cfg.urls.registration, /^\/api\/users\/me$/, [/^\/api/, '']));
+app.use(P(cfg.urls.login, /^\/api\/auth\/(login|me|history(\/[\w.-]+)?)$/, [/^\/api\/auth/, '']));
 app.use(P(cfg.urls.classes, /^\/api\/classes/, [/^\/api/, '']));
 app.use(P(cfg.urls.content, /^\/api\/content/, [/^\/api/, '']));
 app.use(P(cfg.urls.practice, /^\/api\/practice/, [/^\/api/, '']));

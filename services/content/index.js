@@ -4,7 +4,7 @@ const { z } = require('zod');
 const mongoose = require('mongoose');
 const { createApp, finish, start } = require('../../common/app');
 const { trustGateway, role, internal } = require('../../common/auth');
-const { requireClassAccess } = require('../../common/clients');
+const { requireClassAccess, cascade } = require('../../common/clients');
 const { wrap, httpError, oid, cleanJson } = require('../../common/util');
 const { generate, askAssistant, generateFeedbackTemplate, Question } = require('./generate');
 
@@ -19,6 +19,7 @@ const schema = new mongoose.Schema({
   source: { type: String, default: 'manual' },
 }, { timestamps: true });
 cleanJson(schema);
+schema.index({ classId: 1, published: 1, createdAt: -1 });
 const PracticeSet = mongoose.model('PracticeSet', schema);
 
 // Students never receive answers or clues; those stay server-side.
@@ -69,8 +70,12 @@ app.post('/content/sets/:id/publish', role('teacher'), wrap(async (req, res) => 
   if (published && s.questions.length === 0) throw httpError(400, 'Add at least one question before publishing');
   s.published = published; res.json(await s.save());
 }));
-app.delete('/content/sets/:id', role('teacher'), wrap(async (req, res) => { const s = await ownSet(req, req.params.id); await s.deleteOne(); res.status(204).end(); }));
-app.post('/content/assistant', wrap(async (req, res) => {
+app.delete('/content/sets/:id', role('teacher'), wrap(async (req, res) => {
+  const s = await ownSet(req, req.params.id); await s.deleteOne();
+  const cleanup = await cascade(['practice', 'analytics'], `/internal/sets/${s.id}`);
+  res.json({ deleted: { id: s.id, title: s.title }, cleanup });
+}));
+app.post('/content/assistant', role('admin', 'teacher', 'student'), wrap(async (req, res) => {
   const { prompt } = z.object({ prompt: z.string().trim().min(1).max(2000) }).parse(req.body);
   const reply = await askAssistant(prompt);
   res.json({ reply });
@@ -79,6 +84,10 @@ app.post('/content/feedback-template', role('teacher'), wrap(async (req, res) =>
   const { studentName, areaToImprove } = z.object({ studentName: z.string().default('Student'), areaToImprove: z.string().default('') }).parse(req.body);
   const template = await generateFeedbackTemplate(studentName, areaToImprove);
   res.json({ template });
+}));
+// Called by class-service when a class is deleted.
+app.delete('/internal/classes/:id', internal, wrap(async (req, res) => {
+  const r = await PracticeSet.deleteMany({ classId: req.params.id }); res.json({ deleted: r.deletedCount });
 }));
 app.get('/internal/sets/:id', internal, wrap(async (req, res) => {
   const s = await PracticeSet.findById(oid(req.params.id)); if (!s) throw httpError(404, 'Set not found'); res.json(s);

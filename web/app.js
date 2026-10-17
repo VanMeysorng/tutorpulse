@@ -10,7 +10,7 @@ const store = {
 };
 let token = store.get('tp_token'), me = null;
 try { me = JSON.parse(store.get('tp_user') || 'null'); } catch (e) {}
-const S = { draft: null, tab: 'sets', qi: 0, sel: '', fb: null, sets: [], timer: null, pr: null, radarSet: '', activeStudent: null, chatOpen: false, chatHistory: [] };
+const S = { draft: null, tab: 'sets', qi: 0, sel: '', fb: null, sets: [], timer: null, pr: null, radarSet: '', activeStudent: null, chatOpen: false, chatHistory: [], fbEdit: null, ivEdit: null, ivFilter: '' };
 
 /* ---------- helpers ---------- */
 const go = h => { if (location.hash === h) route(); else location.hash = h; };
@@ -72,6 +72,7 @@ async function route() {
     else if (p === 'set' && me.role === 'teacher') show(await tSet(a));
     else if (p === 'practice' && me.role === 'student') { S.qi = null; show(await practice(a)); }
     else if (p === 'history') show(await history());
+    else if (p === 'profile') show(await profile());
     else go('#/dash');
     if (p === 'class' && S.tab === 'radar' && me.role !== 'student') S.timer = setInterval(refreshRadar, 6000);
   } catch (e) { if (e.message !== 'expired') show(`<div class="card"><h2>Something went wrong</h2><p class="mut">${esc(e.message)}</p><a class="btn" href="#/dash">Back to dashboard</a></div>`); }
@@ -490,7 +491,7 @@ async function tDash() {
   return `<h2 style="margin-bottom:14px">Your classes</h2><div class="card"><div class="row"><input id="c-name" placeholder="New class name, e.g. Grade 10 Algebra" style="flex:1;min-width:200px" data-enter-for="newClass"><button class="btn" data-a="newClass">Create class</button></div></div>
 <div class="card">${cs.length ? cs.map(c => `<div class="item"><div><b>${esc(c.name)}</b><div class="mut">Code ${esc(c.code)} · ${c.studentIds.length} student(s)</div></div><a class="btn sec" href="#/class/${c.id}">Open</a></div>`).join('') : '<p class="mut">No classes yet. Create your first class above.</p>'}</div>${footer()}`;
 }
-const footer = () => `<p class="mut" style="margin-top:20px"><a href="#/history" style="color:var(--cy)">Login history</a></p>`;
+const footer = () => `<p class="mut" style="margin-top:20px"><a href="#/profile" style="color:var(--cy)">My profile</a> · <a href="#/history" style="color:var(--cy)">Login history</a></p>`;
 async function tClass(id) {
   const c = await api('GET', '/classes/' + id);
   const admin = me.role === 'admin'; if (admin) { S.tab = 'radar'; S.radarSet = ''; S.sets = []; }
@@ -536,7 +537,11 @@ ${curStudent ? `<div class="card" style="border:1px solid #38e1ff55;background:#
 </div>` : ''}
 
 <div class="card"><h2>Sent Feedback & Meetings (${fbs.length})</h2>
-${fbs.length ? fbs.map(f => `<div class="feedback-card"><div class="row" style="justify-content:space-between"><b>${esc(f.studentName || 'Student')}</b><span class="mut" style="font-size:12px">${new Date(f.createdAt).toLocaleDateString()}</span></div>
+${fbs.length ? fbs.map(f => S.fbEdit === f.id ? `<div class="feedback-card"><b>Edit feedback for ${esc(f.studentName || 'Student')}</b>
+<input id="fe-area" value="${esc(f.areaToImprove)}" placeholder="Area to improve" style="margin-top:8px">
+<textarea id="fe-text" style="min-height:80px;margin-top:8px">${esc(f.feedbackText)}</textarea>
+<div class="row" style="gap:8px;margin-top:8px"><input type="date" id="fe-date" value="${esc(f.meetingDate)}" style="flex:1"><input type="time" id="fe-time" value="${esc(f.meetingTime)}" style="flex:1"><input id="fe-topic" value="${esc(f.meetingTopic)}" placeholder="Meeting topic" style="flex:2"></div>
+<div class="row" style="margin-top:10px"><button class="btn" data-a="saveFb" data-v="${f.id}">Save changes</button><button class="btn sec" data-a="cancelFb">Cancel</button></div></div>` : `<div class="feedback-card"><div class="row" style="justify-content:space-between"><b>${esc(f.studentName || 'Student')}</b><span class="row" style="gap:6px"><span class="mut" style="font-size:12px">${new Date(f.createdAt).toLocaleDateString()}</span><button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="editFb" data-v="${f.id}">Edit</button><button class="btn dng" style="padding:4px 10px;font-size:12px" data-a="delFb" data-v="${f.id}">Delete</button></span></div>
 ${f.areaToImprove ? `<div style="margin-top:4px"><span class="badge" style="background:#ffc43d22;color:var(--warn)">Area to improve: ${esc(f.areaToImprove)}</span></div>` : ''}
 <p style="margin:8px 0;line-height:1.4">${esc(f.feedbackText)}</p>
 ${f.meetingDate ? `<div class="pulse-badge" style="font-size:12px;margin-top:6px">📅 Meeting: ${esc(f.meetingDate)} ${esc(f.meetingTime)} — Topic: <b>${esc(f.meetingTopic)}</b></div>` : ''}
@@ -548,12 +553,12 @@ ${f.studentResponse ? `<div style="margin-top:8px;padding-top:8px;border-top:1px
     body = `<div class="card"><h2>Class Code</h2><div class="code">${esc(c.code)}</div><p class="mut">Students enter this 6-letter code to join. Regenerate it if it was shared too widely.</p>
 <div class="row" style="margin-top:12px"><button class="btn sec" data-a="regenCode">Regenerate code</button></div></div>
 <div class="card"><h2>Rename Class</h2><div class="row"><input id="r-name" value="${esc(c.name)}" style="flex:1;min-width:200px"><button class="btn sec" data-a="renameClass">Save</button></div></div>
-<div class="card"><h2>Enrolled Students (${st.count})</h2>${st.students.length ? st.students.map(s => `<div class="item"><span><b>${esc(s.name)}</b></span><span class="mut">${s.id}</span></div>`).join('') : '<p class="mut">Nobody has joined yet.</p>'}</div>
+<div class="card"><h2>Enrolled Students (${st.count})</h2>${st.students.length ? st.students.map(s => `<div class="item"><span><b>${esc(s.name)}</b> <span class="mut" style="font-size:12px">${s.id}</span></span><button class="btn dng" style="padding:4px 10px;font-size:12px" data-a="removeStudent" data-v="${s.id}">Remove</button></div>`).join('') : '<p class="mut">Nobody has joined yet.</p>'}</div>
 <div class="card"><button class="btn dng" data-a="delClass">Delete class</button></div>`;
   } else {
     if (!admin) { S.sets = await api('GET', `/content/classes/${id}/sets`); if (!S.radarSet || !S.sets.find(s => s.id === S.radarSet)) S.radarSet = (S.sets[0] || {}).id || ''; }
     const sel = admin ? '' : `<div class="row" style="margin-bottom:14px"><span class="mut">Practice set</span><select id="radar-set">${S.sets.map(s => `<option value="${s.id}" ${s.id === S.radarSet ? 'selected' : ''}>${esc(s.title)}</option>`).join('')}</select><button class="btn sec" data-a="csv">Export CSV</button></div>`;
-    body = sel + `<div id="radarBox">${await radarHtml(id)}</div>`;
+    body = sel + `<div id="radarBox">${await radarHtml(id)}</div><div id="ivBox">${await ivHtml(id)}</div>`;
   }
   const tabs = admin ? '' : '<div class="steps">' + [['sets', 'Practice Sets'], ['ranking', 'Student Scores & Ranking'], ['share', 'Enrollment & Code'], ['radar', 'Gap Radar']].map(t => `<button data-a="tab" data-v="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('') + '</div>';
   return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2></div>${tabs}${body}`;
@@ -572,6 +577,33 @@ ${studs.length ? `<div class="card"><h2>Heatmap</h2><p class="mut">Rows are stud
 <div class="card"><h2>Per student</h2><div class="tbl"><table><tr><th>Student</th><th>Attempts</th><th>Correct</th><th>Clues</th><th>Solved</th></tr>${studs.length ? studs.map(s => `<tr><td>${esc(s.name)}</td><td>${s.attempts}</td><td>${s.correct}</td><td>${s.clues}</td><td>${s.solvedQuestions}/${nq}</td></tr>`).join('') : '<tr><td colspan="5" class="mut">No activity yet.</td></tr>'}</table></div></div>
 <div class="card"><h2>Flagged concepts</h2>${fl.length ? fl.map(c => `<p>${tag(c.status)} <b>${esc(c.concept || 'Unknown')}</b>: ${Math.round(c.wrongRate * 100)}% wrong, ${c.avgClues} clues per student</p>`).join('') + '<p class="mut">Consider a quick recap on these before moving on.</p>' : '<p class="mut">No concept needs attention yet.</p>'}</div>`;
 }
+const IV_ST = { open: 'Open', in_progress: 'In progress', done: 'Done' };
+async function ivHtml(id) {
+  const admin = me.role === 'admin';
+  const [list, concepts] = await Promise.all([
+    api('GET', `/analytics/classes/${id}/interventions${S.ivFilter ? '?status=' + S.ivFilter : ''}`),
+    api('GET', `/analytics/classes/${id}/concepts`)]);
+  const flagged = concepts.filter(c => c.status !== 'ok' && c.concept);
+  const form = admin ? '' : `<div class="q" style="margin-bottom:14px"><h3>New intervention</h3>
+${flagged.length ? `<div class="row" style="gap:6px;margin-top:6px"><span class="mut" style="font-size:12px">Flagged:</span>${flagged.map(c => `<button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="pickIv" data-v="${esc(c.concept)}">${esc(c.concept)}</button>`).join('')}</div>` : ''}
+<div class="grid2" style="margin-top:8px"><input id="iv-concept" list="iv-concepts" placeholder="Concept, e.g. Discriminant"><select id="iv-priority"><option value="high">High priority</option><option value="medium" selected>Medium priority</option><option value="low">Low priority</option></select></div>
+<datalist id="iv-concepts">${concepts.filter(c => c.concept).map(c => `<option value="${esc(c.concept)}">`).join('')}</datalist>
+<textarea id="iv-action" placeholder="Action plan, e.g. Re-teach b² − 4ac with 3 worked examples on Friday" style="min-height:70px;margin-top:8px"></textarea>
+<div class="row" style="margin-top:8px"><span class="mut" style="font-size:12px">Due date</span><input type="date" id="iv-due" style="flex:1;min-width:150px"><button class="btn" data-a="addIv">Add intervention</button></div></div>`;
+  const item = v => S.ivEdit === v.id ? `<div class="feedback-card"><b>${esc(v.concept)}</b>
+<textarea id="ive-action" style="min-height:70px;margin-top:8px">${esc(v.action)}</textarea>
+<div class="grid2" style="margin-top:8px"><select id="ive-priority">${['high', 'medium', 'low'].map(p => `<option value="${p}" ${v.priority === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)} priority</option>`).join('')}</select><input type="date" id="ive-due" value="${esc(v.dueDate)}"></div>
+<input id="ive-outcome" value="${esc(v.outcome)}" placeholder="Outcome, e.g. wrong-answer rate dropped to 20%" style="margin-top:8px">
+<div class="row" style="margin-top:10px"><button class="btn" data-a="saveIv" data-v="${v.id}">Save changes</button><button class="btn sec" data-a="cancelIv">Cancel</button></div></div>`
+    : `<div class="feedback-card"><div class="row" style="justify-content:space-between"><span><b>${esc(v.concept)}</b> <span class="tag ${v.priority === 'high' ? 'r' : v.priority === 'medium' ? 'y' : 'g'}">${esc(v.priority)}</span></span>
+<span class="row" style="gap:6px">${admin ? `<span class="tag ${v.status === 'done' ? 'g' : 'y'}">${IV_ST[v.status]}</span>` : `<select data-ivid="${v.id}">${Object.entries(IV_ST).map(([k, n]) => `<option value="${k}" ${v.status === k ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="editIv" data-v="${v.id}">Edit</button><button class="btn dng" style="padding:4px 10px;font-size:12px" data-a="delIv" data-v="${v.id}">Delete</button>`}</span></div>
+<p style="margin:8px 0;line-height:1.4">${esc(v.action)}</p>
+<div class="mut" style="font-size:12px">${v.dueDate ? `Due ${esc(v.dueDate)} · ` : ''}When created: ${v.snapshot ? `${Math.round((v.snapshot.wrongRate || 0) * 100)}% wrong, ${v.snapshot.avgClues || 0} clues per student` : 'no data'}</div>
+${v.outcome ? `<div style="margin-top:6px;font-size:13px"><span style="color:var(--pri)">Outcome:</span> ${esc(v.outcome)}</div>` : ''}</div>`;
+  return `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Interventions (${list.length})</h2><select id="iv-filter"><option value="">All statuses</option>${Object.entries(IV_ST).map(([k, n]) => `<option value="${k}" ${S.ivFilter === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+<p class="mut">Your action plan for the weak concepts the Gap Radar finds.</p>${form}${list.length ? list.map(item).join('') : '<p class="mut">No interventions yet.</p>'}</div>`;
+}
+async function refreshIv() { const box = $('#ivBox'); if (box) box.innerHTML = await ivHtml(cid()); }
 async function refreshRadar() {
   const box = $('#radarBox'); if (!box || S.tab !== 'radar') return stopTimer();
   try { box.innerHTML = await radarHtml(cid()); } catch (e) { stopTimer(); }
@@ -617,7 +649,7 @@ async function sClass(id) {
   const myRank = myRankItem ? `#${myRankItem.rank} (${myRankItem.score} pts)` : 'Unranked (complete a practice set to rank)';
   const rankBadge = r => r === 1 ? '<span class="rank-badge rank-1">🥇1</span>' : r === 2 ? '<span class="rank-badge rank-2">🥈2</span>' : r === 3 ? '<span class="rank-badge rank-3">🥉3</span>' : `<span class="rank-badge rank-other">${r}</span>`;
 
-  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2></div>
+  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">All classes</a><h2 style="margin:0">${esc(c.name)}</h2><button class="btn dng" data-a="leaveClass" style="margin-left:auto">Leave class</button></div>
 
 <div class="card" style="border:1px solid #b6ff3c44;background:#131b26">
 <div class="row" style="justify-content:space-between">
@@ -658,11 +690,11 @@ function practiceView() {
   return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">${esc(set.title)}</h2></div>
 <div class="practice-lock-banner">🔒 <b>AI Chatbot Assistant is NOT available during practice mode.</b> Use the 3 scaffolded clues below for targeted hints!</div>
 ${set.cheat.length ? `<div class="cheat pin"><b>Cheat sheet</b><ul style="margin:6px 0 0;padding-left:18px">${set.cheat.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-<div class="card"><div class="prog"><div class="ring" style="--p:${Math.round(prog.solved / prog.total * 100)}"><b>${prog.solved}/${prog.total}</b></div><div><div class="mut">Your progress</div><b style="font-size:18px">${done ? 'Set complete' : 'Keep going'}</b></div></div>
+<div class="card"><div class="prog"><div class="ring" style="--p:${Math.round(prog.solved / prog.total * 100)}"><b>${prog.solved}/${prog.total}</b></div><div><div class="mut">Your progress</div><b style="font-size:18px">${done ? 'Set complete' : 'Keep going'}</b></div>${prog.questions.some(x => x.attempts || x.cluesUsed) ? '<button class="btn sec" data-a="resetSet" style="margin-left:auto">Start over</button>' : ''}</div>
 <div class="dots">${prog.questions.map((x, k) => `<button data-a="goQ" data-v="${k}" class="${k === i ? 'on' : ''} ${x.solved ? 'dn' : ''}">${k + 1}</button>`).join('')}</div>
 <div class="mut">${esc(q.concept)}</div><h2 style="margin:6px 0 10px">${esc(q.q)}</h2>
 ${q.type === 'mcq' ? q.options.map(o => `<button class="opt ${S.sel === o ? 'sel' : ''}" data-a="pick" data-v="${esc(o)}" ${p.solved ? 'disabled' : ''}>${esc(o)}</button>`).join('') : `<input id="p-num" inputmode="decimal" placeholder="Your answer" value="${esc(S.sel)}" ${p.solved ? 'disabled' : ''} data-enter-for="attempt">`}
-<div class="row" style="margin-top:12px"><button class="btn" data-a="attempt" ${p.solved ? 'disabled' : ''}>Submit</button><button class="btn sec" data-a="clue" ${p.solved || p.cluesUsed >= 3 ? 'disabled' : ''}>Need a nudge? (${p.cluesUsed}/3)</button></div>
+<div class="row" style="margin-top:12px"><button class="btn" data-a="attempt" ${p.solved ? 'disabled' : ''}>Submit</button><button class="btn sec" data-a="clue" ${p.solved || p.cluesUsed >= 3 ? 'disabled' : ''}>Need a nudge? (${p.cluesUsed}/3)</button>${p.attempts || p.cluesUsed ? '<button class="btn sec" data-a="resetQ">Reset this question</button>' : ''}</div>
 ${p.clues.map((t, j) => `<div class="clue"><b>Clue ${j + 1}:</b> ${esc(t)}</div>`).join('')}
 ${p.solved ? '<div class="fb" style="color:var(--pri)">Solved. Locked in.</div>' : S.fb === 'bad' ? '<div class="fb bad">Not quite. Run it back or grab a clue.</div>' : ''}
 ${p.solved && i < prog.total - 1 ? `<div style="margin-top:12px"><button class="btn" data-a="goQ" data-v="${i + 1}">Next question</button></div>` : ''}
@@ -671,13 +703,16 @@ ${done ? '<div class="fb" style="color:var(--pri)">All done. Your teacher can se
 async function refreshPractice() { S.pr.prog = await api('GET', `/practice/sets/${S.pr.id}/progress`); show(practiceView()); }
 
 /* ---------- admin + history ---------- */
-let aTab = 'users', aPage = 1, aRole = '';
+let aTab = 'users', aPage = 1, aRole = '', aSearch = '', aEdit = null;
 async function aDash() {
   let body;
   if (aTab === 'users') {
-    const u = await api('GET', `/admin/users?page=${aPage}&limit=15${aRole ? '&role=' + aRole : ''}`);
-    body = `<div class="card"><div class="row" style="margin-bottom:12px"><span class="mut">Filter</span><select id="a-role"><option value="">All roles</option>${['admin', 'teacher', 'student'].map(r => `<option value="${r}" ${aRole === r ? 'selected' : ''}>${roleName(r)}</option>`).join('')}</select><span class="mut">${u.total} user(s)</span></div>
-<div class="tbl"><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>${u.items.map(x => `<tr><td>${esc(x.name)}</td><td>${esc(x.email)}</td><td><select data-uid="${x.id}">${['admin', 'teacher', 'student'].map(r => `<option value="${r}" ${x.role === r ? 'selected' : ''}>${roleName(r)}</option>`).join('')}</select></td><td>${x.id === me.id ? '' : `<button class="btn dng" data-a="delUser" data-v="${x.id}">Delete</button>`}</td></tr>`).join('')}</table></div>
+    const u = await api('GET', `/admin/users?page=${aPage}&limit=15${aRole ? '&role=' + aRole : ''}${aSearch ? '&search=' + encodeURIComponent(aSearch) : ''}`);
+    body = `<div class="card"><h2>Add user</h2><div class="grid2" style="margin-top:8px"><input id="nu-name" placeholder="Full name"><input id="nu-email" type="email" placeholder="Email"></div>
+<div class="grid2" style="margin-top:8px"><input id="nu-pass" type="password" placeholder="Password (8+ chars, letter and number)"><select id="nu-role"><option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Administrator</option></select></div>
+<button class="btn" data-a="addUser" style="margin-top:10px">Create user</button></div>
+<div class="card"><div class="row" style="margin-bottom:12px"><input id="a-search" value="${esc(aSearch)}" placeholder="Search name or email" style="flex:1;min-width:180px" data-enter-for="aFind"><button class="btn sec" data-a="aFind">Search</button>${aSearch ? '<button class="btn sec" data-a="aClear">Clear</button>' : ''}<span class="mut">Filter</span><select id="a-role"><option value="">All roles</option>${['admin', 'teacher', 'student'].map(r => `<option value="${r}" ${aRole === r ? 'selected' : ''}>${roleName(r)}</option>`).join('')}</select><span class="mut">${u.total} user(s)</span></div>
+<div class="tbl"><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>${u.items.map(x => aEdit === x.id ? `<tr><td><input id="eu-name" value="${esc(x.name)}"></td><td><input id="eu-email" value="${esc(x.email)}"></td><td>${roleName(x.role)}</td><td><div class="row" style="gap:6px"><button class="btn" style="padding:4px 10px;font-size:12px" data-a="saveUser" data-v="${x.id}">Save</button><button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="cancelUser">Cancel</button></div></td></tr>` : `<tr><td>${esc(x.name)}</td><td>${esc(x.email)}</td><td><select data-uid="${x.id}">${['admin', 'teacher', 'student'].map(r => `<option value="${r}" ${x.role === r ? 'selected' : ''}>${roleName(r)}</option>`).join('')}</select></td><td><div class="row" style="gap:6px"><button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="editUser" data-v="${x.id}">Edit</button>${x.id === me.id ? '' : `<button class="btn dng" style="padding:4px 10px;font-size:12px" data-a="delUser" data-v="${x.id}">Delete</button>`}</div></td></tr>`).join('') || '<tr><td colspan="4" class="mut">No users match.</td></tr>'}</table></div>
 <div class="row" style="margin-top:12px"><button class="btn sec" data-a="aPrev" ${aPage <= 1 ? 'disabled' : ''}>Previous</button><span class="mut">Page ${u.page}</span><button class="btn sec" data-a="aNext" ${u.page * u.limit >= u.total ? 'disabled' : ''}>Next</button></div></div>`;
   } else {
     const cs = await api('GET', '/classes');
@@ -687,7 +722,16 @@ async function aDash() {
 }
 async function history() {
   const h = await api('GET', '/auth/history');
-  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">Login history</h2></div><div class="card"><div class="tbl"><table><tr><th>When</th><th>Result</th><th>IP address</th></tr>${h.map(x => `<tr><td>${new Date(x.createdAt).toLocaleString()}</td><td>${x.success ? '<span class="tag g">Success</span>' : '<span class="tag r">Failed</span>'}</td><td>${esc(x.ip || '')}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">No history.</td></tr>'}</table></div></div>`;
+  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">Login history</h2>${h.length ? '<button class="btn dng" data-a="clearHistory" style="margin-left:auto">Clear history</button>' : ''}</div><div class="card"><div class="tbl"><table><tr><th>When</th><th>Result</th><th>IP address</th><th></th></tr>${h.map(x => `<tr><td>${new Date(x.createdAt).toLocaleString()}</td><td>${x.success ? '<span class="tag g">Success</span>' : '<span class="tag r">Failed</span>'}</td><td>${esc(x.ip || '')}</td><td>${x.id ? `<button class="btn sec" style="padding:4px 10px;font-size:12px" data-a="delHistory" data-v="${x.id}">Delete</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="mut">No history.</td></tr>'}</table></div></div>`;
+}
+async function profile() {
+  const u = await api('GET', '/users/me');
+  return `<div class="row" style="margin-bottom:12px"><a class="btn sec" href="#/dash">Back</a><h2 style="margin:0">My profile</h2></div>
+<div class="card"><h2>Account</h2><p class="mut">${esc(u.email)} · ${roleName(u.role)}${u.createdAt ? ' · joined ' + new Date(u.createdAt).toLocaleDateString() : ''}</p>
+<p class="mut" style="font-size:12px;margin-top:12px">Display name</p><div class="row" style="margin-top:4px"><input id="pf-name" value="${esc(u.name)}" style="flex:1;min-width:200px" data-enter-for="saveName"><button class="btn" data-a="saveName">Save name</button></div></div>
+<div class="card"><h2>Change password</h2><p class="mut">At least 8 characters, with a letter and a number.</p>
+<input id="pf-cur" type="password" placeholder="Current password" style="margin-top:8px"><input id="pf-new" type="password" placeholder="New password" style="margin-top:8px"><input id="pf-new2" type="password" placeholder="Repeat new password" style="margin-top:8px">
+<button class="btn" data-a="savePassword" style="margin-top:12px">Update password</button><div class="err" id="pf-err"></div></div>${footer()}`;
 }
 
 /* ---------- AI Assistant Widget ---------- */
@@ -845,6 +889,57 @@ const A = {
   },
   async clue() { await api('POST', `/practice/sets/${S.pr.id}/questions/${S.qi}/clue`, {}); await refreshPractice(); },
   aTab(b, v) { aTab = v; return route(); }, aPrev() { aPage--; return route(); }, aNext() { aPage++; return route(); },
+  /* profile & login history */
+  async saveName() {
+    const name = val('pf-name').trim(); if (name.length < 2) return toast('Name must be at least 2 characters.', true);
+    const u = await api('PUT', '/users/me', { name }); setSession(token, { ...me, name: u.name }); toast('Name updated.'); route();
+  },
+  async savePassword() {
+    const cur = val('pf-cur'), nw = val('pf-new'), nw2 = val('pf-new2'), err = $('#pf-err'); if (err) err.textContent = '';
+    if (!cur || !nw) return toast('Fill in your current and new password.', true);
+    if (nw !== nw2) { if (err) err.textContent = 'The new passwords do not match.'; return; }
+    try { await api('PUT', '/users/me', { currentPassword: cur, newPassword: nw }); toast('Password updated.'); route(); }
+    catch (e) { if (err) err.textContent = e.status === 401 ? 'Current password is incorrect.' : e.message; }
+  },
+  async delHistory(b, v) { await api('DELETE', '/auth/history/' + v); toast('Record deleted.'); route(); },
+  async clearHistory() { if (!confirm('Clear your whole login history?')) return; const r = await api('DELETE', '/auth/history'); toast(`Cleared ${r.deleted} record(s).`); route(); },
+  /* admin users */
+  aFind() { aSearch = val('a-search').trim(); aPage = 1; return route(); },
+  aClear() { aSearch = ''; aPage = 1; return route(); },
+  async addUser() {
+    const body = { name: val('nu-name').trim(), email: val('nu-email').trim(), password: val('nu-pass'), role: val('nu-role') };
+    const u = await api('POST', '/admin/users', body); toast(`Created ${u.name} (${roleName(u.role)}).`); route();
+  },
+  editUser(b, v) { aEdit = v; return route(); },
+  cancelUser() { aEdit = null; return route(); },
+  async saveUser(b, v) { await api('PUT', '/admin/users/' + v, { name: val('eu-name').trim(), email: val('eu-email').trim() }); aEdit = null; toast('User updated.'); route(); },
+  /* teacher: feedback & roster */
+  editFb(b, v) { S.fbEdit = v; return route(); },
+  cancelFb() { S.fbEdit = null; return route(); },
+  async saveFb(b, v) {
+    await api('PUT', `/classes/${cid()}/feedback/${v}`, { feedbackText: val('fe-text').trim(), areaToImprove: val('fe-area').trim(), meetingDate: val('fe-date'), meetingTime: val('fe-time'), meetingTopic: val('fe-topic').trim() });
+    S.fbEdit = null; toast('Feedback updated.'); route();
+  },
+  async delFb(b, v) { if (!confirm('Delete this feedback?')) return; await api('DELETE', `/classes/${cid()}/feedback/${v}`); toast('Feedback deleted.'); route(); },
+  async removeStudent(b, v) { if (!confirm('Remove this student from the class?')) return; await api('DELETE', `/classes/${cid()}/students/${v}`); toast('Student removed.'); route(); },
+  /* student */
+  async leaveClass() { if (!confirm('Leave this class? You can join again with the class code.')) return; await api('POST', `/classes/${cid()}/leave`, {}); toast('You left the class.'); go('#/dash'); },
+  async resetQ() { if (!confirm('Clear your answers and clues for this question?')) return; await api('DELETE', `/practice/sets/${S.pr.id}/questions/${S.qi}/attempts`); S.fb = null; S.sel = ''; await refreshPractice(); },
+  async resetSet() { if (!confirm('Start this set over? All your answers and clues will be cleared.')) return; await api('DELETE', `/practice/sets/${S.pr.id}/progress`); S.qi = 0; S.fb = null; S.sel = ''; await refreshPractice(); },
+  /* interventions */
+  pickIv(b, v) { const i = $('#iv-concept'); if (i) { i.value = v; i.focus(); } },
+  async addIv() {
+    const body = { concept: val('iv-concept').trim(), action: val('iv-action').trim(), priority: val('iv-priority'), dueDate: val('iv-due'), ...(S.radarSet ? { setId: S.radarSet } : {}) };
+    if (!body.concept || body.action.length < 3) return toast('Add a concept and an action plan.', true);
+    await api('POST', `/analytics/classes/${cid()}/interventions`, body); toast('Intervention added.'); await refreshIv();
+  },
+  editIv(b, v) { S.ivEdit = v; return refreshIv(); },
+  cancelIv() { S.ivEdit = null; return refreshIv(); },
+  async saveIv(b, v) {
+    await api('PUT', `/analytics/classes/${cid()}/interventions/${v}`, { action: val('ive-action').trim(), priority: val('ive-priority'), dueDate: val('ive-due'), outcome: val('ive-outcome').trim() });
+    S.ivEdit = null; toast('Intervention updated.'); await refreshIv();
+  },
+  async delIv(b, v) { if (!confirm('Delete this intervention?')) return; await api('DELETE', `/analytics/classes/${cid()}/interventions/${v}`); toast('Intervention deleted.'); await refreshIv(); },
   async delUser(b, v) { if (!confirm('Delete this user?')) return; await api('DELETE', '/admin/users/' + v); toast('User deleted.'); route(); },
 };
 document.addEventListener('click', e => {
@@ -1067,6 +1162,8 @@ document.addEventListener('change', async e => {
   const t = e.target;
   if (t.id === 'radar-set') { S.radarSet = t.value; const box = $('#radarBox'); if (box) box.innerHTML = await radarHtml(cid()); }
   else if (t.id === 'a-role') { aRole = t.value; aPage = 1; route(); }
+  else if (t.id === 'iv-filter') { S.ivFilter = t.value; await refreshIv(); }
+  else if (t.dataset.ivid) { try { await api('PUT', `/analytics/classes/${cid()}/interventions/${t.dataset.ivid}`, { status: t.value }); toast('Status updated.'); await refreshIv(); } catch (err) { toast(err.message, true); } }
   else if (t.dataset.uid) { try { await api('PATCH', `/admin/users/${t.dataset.uid}/role`, { role: t.value }); toast('Role updated.'); } catch (err) { toast(err.message, true); route(); } }
   else if (t.id === 's-file') {
     const f = t.files[0];

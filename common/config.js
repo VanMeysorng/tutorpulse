@@ -14,5 +14,10 @@ module.exports = {
     practice: e.PRACTICE_URL || 'http://practice:3005',
     analytics: e.ANALYTICS_URL || 'http://analytics:3006',
   },
-  need(...keys) { keys.forEach(k => { if (!e[k]) throw new Error(`Missing required env var ${k}`); }); },
+  need(...keys) {
+    keys.forEach(k => {
+      if (!e[k]) throw new Error(`Missing required env var ${k}`);
+      if (/^change-me/i.test(e[k])) console.warn(`WARNING: ${k} still uses the public placeholder value. Generate a real secret before deploying.`);
+    });
+  },
 };

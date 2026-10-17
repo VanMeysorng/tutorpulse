@@ -13,7 +13,7 @@ services:
     image: nginx:1.27-alpine
     profiles: [all, edge]
     restart: unless-stopped
-    ports: ["3080:80"]
+    ports: ["80:80"]          # http://<EC2-1-PUBLIC-IP>/ (port 80, open in the security group)
     environment:
       GATEWAY_1: "${GATEWAY_1:-gateway-1:3000}"
       GATEWAY_2: "${GATEWAY_2:-gateway-2:3000}"
@@ -31,7 +31,7 @@ services:
     <<: *common
     build: { context: ., args: { SERVICE: gateway } }
     profiles: [all, core]
-    ports: ["3007:3000"]
+    ports: ["3007:3000"]      # EC2-2 host port 3007 -> set GATEWAY_2=<EC2-2-PRIVATE-IP>:3007
     environment: { PORT: 3000, INSTANCE_ID: gateway-2 }
   registration:
     <<: *common
