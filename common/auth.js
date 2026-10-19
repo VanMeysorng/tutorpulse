@@ -3,6 +3,7 @@ const cfg = require('./config');
 const safeEq = (a, b) => { a = Buffer.from(String(a || '')); b = Buffer.from(String(b || '')); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 
 // Every downstream service only accepts traffic that carries the gateway's internal key.
+// So even if someone finds a service port, they can't skip the gateway.
 exports.trustGateway = (req, res, next) => {
   if (req.path === '/health') return next();
   if (!safeEq(req.get('x-internal-key'), cfg.internalKey)) return res.status(403).json({ error: 'Direct access forbidden. Use the API Gateway.' });

@@ -8,6 +8,7 @@ const { trustGateway, internal } = require('../../common/auth');
 const { call } = require('../../common/http');
 const { wrap, httpError, oid } = require('../../common/util');
 
+// Schema: every login attempt is saved (tp_login.loginaudits), success or fail
 const audit = new mongoose.Schema({ email: String, userId: String, success: Boolean, ip: String }, { timestamps: true });
 audit.index({ email: 1, createdAt: -1 });
 audit.index({ userId: 1, createdAt: -1 });
@@ -18,15 +19,18 @@ app.use(trustGateway);
 
 app.post('/login', wrap(async (req, res) => {
   const { email, password } = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(72) }).parse(req.body);
+  // lockout: 5 wrong passwords in 15 minutes -> blocked for a while
   const fails = await Audit.countDocuments({ email, success: false, createdAt: { $gt: new Date(Date.now() - 15 * 60 * 1000) } });
   if (fails >= 5) throw httpError(429, 'Too many failed attempts. Try again in 15 minutes.');
   let user;
   try { user = await call(cfg.urls.registration, '/internal/verify', { method: 'POST', body: { email, password } }); }
   catch (e) {
+    // same message for wrong email and wrong password, so nobody can guess which accounts exist
     if (e.status === 401) { await Audit.create({ email, success: false, ip: req.ip }); throw httpError(401, 'Invalid email or password'); }
     throw e;
   }
   await Audit.create({ email, userId: user.id, success: true, ip: req.ip });
+  // create the JWT: role + name inside, user id as subject, expires in 1 hour
   const token = jwt.sign({ role: user.role, name: user.name }, cfg.jwtSecret, { algorithm: 'HS256', issuer: 'tutorpulse', subject: user.id, expiresIn: cfg.jwtExpires });
   res.json({ token, tokenType: 'Bearer', expiresIn: cfg.jwtExpires, user });
 }));

@@ -8,6 +8,7 @@ const { trustGateway, role, internal } = require('../../common/auth');
 const { wrap, httpError, oid, cleanJson } = require('../../common/util');
 const { names, cascade } = require('../../common/clients');
 
+// Schema: classes collection (tp_classes) - each class has a 6-letter join code
 const schema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 100 },
   code: { type: String, required: true, unique: true },
@@ -16,6 +17,7 @@ const schema = new mongoose.Schema({
 }, { timestamps: true });
 cleanJson(schema);
 const Class = mongoose.model('Class', schema);
+// Schema: feedbacks collection (tp_classes) - teacher feedback + meeting time for a student
 const feedbackSchema = new mongoose.Schema({
   classId: { type: String, required: true, index: true },
   teacherId: { type: String, required: true },
@@ -101,6 +103,7 @@ app.get('/classes/:id/students', role('teacher'), wrap(async (req, res) => {
   const c = await mine(req, req.params.id, { ownerOnly: true }); const n = await names(c.studentIds);
   res.json({ count: c.studentIds.length, studentIds: c.studentIds, students: c.studentIds.map(id => ({ id, name: n[id] || 'Student ' + id.slice(-4) })) });
 }));
+// Delete class (only the owner teacher). It also cleans up sets, attempts and events in the other services.
 app.delete('/classes/:id', role('teacher'), wrap(async (req, res) => {
   const c = await mine(req, req.params.id, { ownerOnly: true });
   res.json({ deleted: { id: c.id, name: c.name }, cleanup: await removeClass(c) });

@@ -1,4 +1,6 @@
 # Edge server on EC2-1: serves the website and load-balances /api across the API Gateway replicas.
+# Load balancer: 2 gateway replicas (gateway-1 on EC2-1, gateway-2 on EC2-2), round robin by default.
+# If one fails 3 times it is skipped for 2s, so the other one takes all the traffic.
 upstream gateways {
     server ${GATEWAY_1} max_fails=3 fail_timeout=2s;
     server ${GATEWAY_2} max_fails=3 fail_timeout=2s;
@@ -13,7 +15,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_connect_timeout 3s;
-    proxy_next_upstream error timeout http_502 http_503;
+    proxy_next_upstream error timeout http_502 http_503;   # retry on the other gateway if one is down
 
     location /api/ {
         proxy_pass http://gateways;

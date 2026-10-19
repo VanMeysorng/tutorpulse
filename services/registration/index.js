@@ -8,6 +8,7 @@ const { trustGateway, role, internal } = require('../../common/auth');
 const { wrap, httpError, oid } = require('../../common/util');
 const { cascade } = require('../../common/clients');
 
+// Schema: users collection in tp_auth (password is stored as a hash, never plain text)
 const User = mongoose.model('User', new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -38,6 +39,7 @@ const AdminUpdate = z.object({
 const app = createApp('registration-service');
 app.use(trustGateway);
 
+// Registration: validate input, hash the password with bcrypt, save the user
 app.post('/register', wrap(async (req, res) => {
   const b = Reg.parse(req.body);
   const u = await User.create({ name: b.name, email: b.email, role: b.role, passwordHash: await bcrypt.hash(b.password, 10) });
