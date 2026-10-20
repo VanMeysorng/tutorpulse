@@ -1,5 +1,5 @@
 # One image for all Node services. SERVICE decides which one runs (gateway, login, classes, ...)
-FROM node:20-alpine
+FROM node:24-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json ./
